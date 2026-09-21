@@ -116,7 +116,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--graph",
-        default=str(ROOT / "data" / "routing" / "basey_town_proper_walk.graphml"),
+        default=str(ROOT / "data" / "routing" / "basey_walk.graphml"),
     )
     parser.add_argument("--output")
     parser.add_argument(

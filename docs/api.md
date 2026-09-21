@@ -14,9 +14,10 @@ There are no authentication, account, user, role, permission, staff, administrat
 
 ## Evacuation routing
 
-Routing is stateless and limited to a separately loaded Basey town-proper study
-area. It uses a frozen local pedestrian graph; a request never downloads road
-data or calls an external routing API.
+Routing is stateless and limited to a separately loaded Basey routing study
+area (currently the full municipal boundary; see
+[routing.md](routing.md)). It uses a frozen local pedestrian graph; a request
+never downloads road data or calls an external routing API.
 
 ### `GET /api/v1/routing/status`
 

@@ -9,16 +9,18 @@ by ordinary assessment requests.
 
 The codebase also contains a shared local OpenStreetMap snapshot for street/POI
 search and an A* routing subsystem. The public interface presents one standard
-walking route to the nearest reachable designated evacuation center inside a
-Basey town-proper study area; hazard-aware comparison remains internal research
-code. The boundary is now reproducibly composed from
-the loaded official PSA polygons for Mercado, Palaypay, Baybay, Sulod, Loyo,
-Buscada, and Lawa-an. That seven-barangay grouping is a researcher-defined
-study boundary, not an independently issued town-proper boundary. Operational
-routing uses the locally imported Basey MDRRMO evacuation-center register,
-the frozen walking graph, and the local search index. The source register and
-its ingestion metadata are retained so developers can audit the configured
-centers; the application does not invent destinations.
+walking route to the nearest reachable designated evacuation center inside the
+loaded Basey routing study area; hazard-aware comparison remains internal
+research code. The active study area is the full Basey municipal boundary
+(official PSA geometry, already used for containment checks elsewhere in the
+app); a reproducible seven-barangay town-proper composite
+(`scripts/build_town_proper_boundary.py`, covering Mercado, Palaypay, Baybay,
+Sulod, Loyo, Buscada, and Lawa-an) remains available as a narrower,
+researcher-defined alternative. Operational routing uses the locally imported
+Basey MDRRMO evacuation-center register, the frozen walking graph, and the
+local search index. The source register and its ingestion metadata are
+retained so developers can audit the configured centers; the application does
+not invent destinations.
 
 The application has a public information site and a unified assessment map. It intentionally contains no user
 accounts, roles, permissions, staff dashboards, administrative portal,

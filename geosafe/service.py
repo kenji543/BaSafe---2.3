@@ -712,7 +712,7 @@ class GeoSafeService:
                 limit=max(limit, 50),
             )
             for item in local_results:
-                item["subtitle"] = item.get("barangay") or "Basey Town Proper"
+                item["subtitle"] = item.get("barangay") or "Basey"
                 item["is_official"] = False
                 item["is_demo"] = False
                 results.append(item)
@@ -732,7 +732,7 @@ class GeoSafeService:
                         "id": center["id"],
                         "name": center["name"],
                         "label": center["name"],
-                        "subtitle": center.get("barangay") or "Basey Town Proper",
+                        "subtitle": center.get("barangay") or "Basey",
                         "latitude": center["latitude"],
                         "longitude": center["longitude"],
                         "barangay": center.get("barangay"),
@@ -1457,7 +1457,7 @@ class GeoSafeService:
             return {
                 "status": "unavailable",
                 "routing_available": False,
-                "scope": "Basey town-proper study area only",
+                "scope": "No routing study area is loaded",
                 "dependencies": {"routing_configuration": False},
                 "notices": ["Routing has not been configured for this deployment."],
             }

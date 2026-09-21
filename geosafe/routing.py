@@ -192,7 +192,7 @@ class HazardAwareRouter:
                 notices.append("No designated evacuation-center records are loaded.")
         if area is None:
             notices.append(
-                "A verified Basey town-proper routing polygon has not been loaded."
+                "A verified Basey routing study-area polygon has not been loaded."
             )
         elif not area["is_official"]:
             notices.append(
@@ -206,7 +206,11 @@ class HazardAwareRouter:
         return {
             "status": "available" if ready else "unavailable",
             "routing_available": ready,
-            "scope": "Basey town-proper study area only",
+            "scope": (
+                f"Limited to the loaded routing study area: {area['name']}"
+                if area is not None
+                else "No routing study area is loaded"
+            ),
             "dependencies": dependencies,
             "evacuation_centers": {
                 "loaded_count": len(loaded_centers),
@@ -248,7 +252,7 @@ class HazardAwareRouter:
         if not self.config.road_graph_path.is_file():
             raise RoutingError(
                 "routing_graph_missing",
-                "The frozen Basey town-proper pedestrian road graph is not loaded.",
+                "The frozen Basey pedestrian road graph is not loaded.",
                 details={"expected_path": str(self.config.road_graph_path)},
                 status_code=503,
             )
@@ -639,16 +643,16 @@ class HazardAwareRouter:
         if area is None:
             raise RoutingError(
                 "outside_routing_area",
-                "Detailed evacuation routing is currently limited to the Basey "
-                "town-proper study area, whose verified boundary is not yet loaded.",
+                "Detailed evacuation routing requires a loaded Basey routing "
+                "study-area boundary, which is not currently loaded.",
                 details={"study_area_loaded": False},
                 status_code=503,
             )
         if not point_in_geometry(lat, lon, area["geometry"]):
             raise RoutingError(
                 "outside_routing_area",
-                "Detailed evacuation routing is currently limited to the Basey "
-                "town-proper study area.",
+                "Detailed evacuation routing is currently limited to the loaded "
+                f"{area['name']} study area.",
                 details={"study_area": area["name"], "version": area["version"]},
             )
         loaded_centers = self.repository.evacuation_centers()
@@ -663,8 +667,8 @@ class HazardAwareRouter:
             raise RoutingError(
                 "no_evacuation_centers",
                 (
-                    "No verified active designated evacuation centers are loaded within "
-                    "the town-proper routing study area."
+                    "No verified active designated evacuation centers are loaded "
+                    f"within the {area['name']} routing study area."
                 ),
                 details={"loaded_center_count": len(loaded_centers)},
                 status_code=503,

@@ -8,16 +8,16 @@
   "maximum_snap_distance_m": 500.0,
   "minimum_hazard_completeness": 1.0,
   "missing_hazard_policy": "reject_edge",
-  "study_area_version": "barangay-composite-v1",
+  "study_area_version": "basey-municipal-boundary-v1",
   "road_network_source": "© OpenStreetMap contributors via OSMnx explicit sync",
-  "road_network_date": "2026-08-16",
-  "road_graph_path": "data/routing/basey_town_proper_walk.graphml",
+  "road_network_date": "2026-09-21",
+  "road_graph_path": "data/routing/basey_walk.graphml",
   "fuzzy_model_version": "0.5.5-demo",
   "hazard_dataset_versions": {
     "flood": "local-snapshot",
     "liquefaction": "local-snapshot",
     "ground_shaking": "local-snapshot"
   },
-  "evacuation_center_dataset_version": "mdrrmo-town-proper-scoped-extract-2026-08-18-v1",
+  "evacuation_center_dataset_version": "mdrrmo-town-proper-scoped-extract-2026-08-18-v1+mswdo-cy2025-osm-matched-2026-09-21-v1",
   "planning_disclaimer": "The displayed route is a research-based planning aid generated from the available road network and mapped hazard information. It does not represent real-time road closures, flood depth, structural damage, traffic, crowds, or an official evacuation order."
 }

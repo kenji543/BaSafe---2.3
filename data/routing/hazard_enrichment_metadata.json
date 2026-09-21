@@ -1,13 +1,12 @@
 {
-  "output": "data/routing/basey_town_proper_walk.graphml",
-  "graph_snapshot_version": "osm-2026-08-16-v1",
-  "hazard_enriched_at": "2026-08-16T02:19:32+00:00",
+  "output": "data\\routing\\basey_walk.graphml",
+  "graph_snapshot_version": "osm-2026-09-21-v1-municipality",
+  "hazard_enriched_at": "2026-09-21T01:15:22+00:00",
   "model_version": "0.5.5-demo",
   "samples_per_edge": 3,
-  "edges_with_complete_hazard_data": 192,
-  "edges_with_unknown_hazard_data": 162,
+  "edges_with_complete_hazard_data": 884,
+  "edges_with_unknown_hazard_data": 1572,
   "assessment_records_created": 0,
-  "evacuation_centers_screened": 9,
-  "missing_hazard_policy": "reject_edge",
-  "evacuation_centers_screened_at": "2026-08-17T20:58:51+00:00"
+  "evacuation_centers_screened": 37,
+  "missing_hazard_policy": "reject_edge"
 }

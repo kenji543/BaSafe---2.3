@@ -207,8 +207,8 @@ def _poi_records(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", default=str(ROOT / "data" / "geosafe.db"))
-    parser.add_argument("--graph-output", default=str(ROOT / "data" / "routing" / "basey_town_proper_walk.graphml"))
-    parser.add_argument("--roads-output", default=str(ROOT / "data" / "routing" / "basey_town_proper_roads.geojson"))
+    parser.add_argument("--graph-output", default=str(ROOT / "data" / "routing" / "basey_walk.graphml"))
+    parser.add_argument("--roads-output", default=str(ROOT / "data" / "routing" / "basey_roads.geojson"))
     parser.add_argument("--metadata-output", default=str(ROOT / "data" / "routing" / "osm_snapshot_metadata.json"))
     parser.add_argument("--snapshot-version", required=True)
     parser.add_argument("--allow-non-authoritative", action="store_true")

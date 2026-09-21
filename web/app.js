@@ -3440,8 +3440,8 @@
     if (!ready) return;
     els["routing-status"].className = "routing-status";
     els["routing-status"].textContent = selected
-      ? "This point can be checked against the loaded town-proper routing boundary."
-      : "Select a point inside Basey to check whether detailed town-proper routing is available.";
+      ? "This point can be checked against the loaded routing study area."
+      : "Select a point inside Basey to check whether detailed evacuation routing is available.";
   }
 
   async function loadRoutingStatus() {
@@ -3656,7 +3656,7 @@
     } catch (error) {
       clearRouteLayers({ clearResult: false });
       const messages = {
-        outside_routing_area: "Detailed evacuation routing is currently limited to the Basey town-proper study area.",
+        outside_routing_area: "Detailed evacuation routing is currently limited to the loaded Basey routing study area.",
         routing_graph_missing: "The local pedestrian road graph is not available.",
         no_evacuation_centers: "No verified designated evacuation centers are loaded.",
         no_reachable_center: "No designated evacuation center is reachable on the loaded walking graph.",

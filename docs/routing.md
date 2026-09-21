@@ -3,18 +3,30 @@
 ## Status
 
 The routing software, APIs, preprocessing pipeline, UI, and synthetic tests are
-implemented. The routing study boundary is a reproducible composite of the
+implemented. The active routing study boundary is the full Basey municipal
+polygon (official PSA geometry, `routing_study_areas` version
+`basey-municipal-boundary-v1`). A narrower, reproducible composite of the
 loaded official PSA polygons for Mercado, Palaypay, Baybay, Sulod, Loyo,
-Buscada, and Lawa-an. The grouping was defined by the project researcher and
-is not represented as an independently issued town-proper boundary.
+Buscada, and Lawa-an remains available via
+`scripts/build_town_proper_boundary.py` and can be reactivated with
+`scripts/import_routing_data.py study-area --replace`; that seven-barangay
+grouping was defined by the project researcher and is not represented as an
+independently issued town-proper boundary.
 
-The frozen local OSM walking graph is present and shared with street/place
-search. A photographed inventory acquired directly from the Basey MDRRMO was
-transcribed into 17 coordinate rows that normalize to nine in-scope facilities,
-all inside the study area and connected road component. The scoped extract is
-loaded as an operator-declared official source, enabling center search and
-shortest-route generation. The source photograph and publication date are not
-yet archived, so this provenance limitation remains explicit.
+The frozen local OSM walking graph now covers the whole active study area and
+is shared with street/place search; because Basey's road/path network is
+sparse away from the town center, the graph has several disconnected
+components, so "nearest reachable center" is still relative to whichever
+component a selected point snaps onto. A photographed inventory acquired
+directly from the Basey MDRRMO was transcribed into 17 coordinate rows that
+normalize to nine in-scope facilities inside the town-proper area, loaded as
+an operator-declared official source and enabling center search and
+shortest-route generation there. The source photograph and publication date
+are not yet archived, so this provenance limitation remains explicit.
+Facilities matched from the municipality's 2025 MSWDO evacuation-center list
+against OpenStreetMap-sourced coordinates are loaded as `supplied-reference`
+(not `is_official`), so they appear in `/api/v1/evacuation-centers` for
+review but are not yet usable as route destinations.
 
 The repository does not substitute the municipal boundary, invent centers, or
 download roads during a route request.

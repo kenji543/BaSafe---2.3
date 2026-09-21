@@ -1,8 +1,9 @@
 # Local OpenStreetMap search
 
 Basafe uses one explicitly synchronized OpenStreetMap snapshot for both
-town-proper place discovery and evacuation routing. Normal user requests never
-contact Overpass, Nominatim, OSMnx, or an external routing service.
+place discovery and evacuation routing across the active routing study area.
+Normal user requests never contact Overpass, Nominatim, OSMnx, or an external
+routing service.
 
 ## Shared snapshot
 
@@ -15,13 +16,16 @@ uv run --extra routing-prep python scripts/sync_osm_network.py `
 
 The command reads the active routing study boundary and writes:
 
-- `data/routing/basey_town_proper_walk.graphml` for NetworkX A*;
-- `data/routing/basey_town_proper_roads.geojson` for search geometry and QGIS;
+- `data/routing/basey_walk.graphml` for NetworkX A*;
+- `data/routing/basey_roads.geojson` for search geometry and QGIS;
 - `data/routing/osm_snapshot_metadata.json` for acquisition and quality data;
 - normalized street and allowlisted POI records in `searchable_locations`.
 
-The seven source barangay members are retained in SQLite. Touching members are
-dissolved into a valid polygonal union only for the OSMnx query.
+The active study area's stored geometry is retained as-is in SQLite (whether a
+single municipal polygon or a multi-barangay composite). A MultiPolygon whose
+touching members make it invalid under OGC rules is dissolved into a valid
+polygonal union only for the OSMnx query; the stored component geometry and
+provenance are never altered by that query-time union.
 
 ## Runtime search
 
