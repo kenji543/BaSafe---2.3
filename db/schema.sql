@@ -354,3 +354,40 @@ CREATE INDEX IF NOT EXISTS idx_searchable_locations_alternate
     ON searchable_locations(active, normalized_alternate_name);
 CREATE INDEX IF NOT EXISTS idx_searchable_locations_type
     ON searchable_locations(active, result_type);
+
+-- Isolated administration support. These tables contain privacy-preserving
+-- aggregate activity and local administrative audit records only.
+CREATE TABLE IF NOT EXISTS visitor_sessions (
+    visitor_id TEXT PRIMARY KEY,
+    first_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_path TEXT,
+    page_views INTEGER NOT NULL DEFAULT 0 CHECK (page_views >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_visitor_sessions_last_seen
+    ON visitor_sessions(last_seen);
+
+CREATE TABLE IF NOT EXISTS visitor_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    visitor_id TEXT NOT NULL REFERENCES visitor_sessions(visitor_id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL DEFAULT 'page_view' CHECK (event_type = 'page_view'),
+    path TEXT NOT NULL,
+    occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_visitor_events_occurred
+    ON visitor_events(occurred_at);
+
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT,
+    details_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created
+    ON admin_audit_log(created_at DESC);

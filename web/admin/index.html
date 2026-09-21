@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#083d38">
+  <title>Overview | Basafe Administration</title>
+  <link rel="icon" href="/icons/icon-192.png"><link rel="stylesheet" href="/admin/admin.css?v=0.2.0">
+  <script defer src="/admin/admin.js?v=0.2.0"></script>
+</head>
+<body data-admin-page="overview">
+  <a class="skip-link" href="#admin-main">Skip to dashboard</a>
+  <header class="admin-header">
+    <a class="admin-brand" href="/admin" aria-label="Basafe administration home"><img src="/icons/basafe-logo-256.png" alt=""><span><strong>Basafe</strong><small>Administration</small></span></a>
+    <div class="environment-pill"><i aria-hidden="true"></i>Isolated development</div>
+    <button id="refresh-dashboard" class="refresh-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>Refresh</button>
+  </header>
+  <div class="admin-layout">
+    <aside class="admin-sidebar" aria-label="Administration navigation">
+      <nav>
+        <a class="active" href="/admin">Overview</a><a href="/admin/analytics">Visitor analytics</a>
+        <a href="/admin/datasets">Hazard data</a><a href="/admin/evacuation-centers">Evacuation centers</a>
+        <a href="/admin/routing">Routing</a><a href="/admin/context">Planning context</a><a href="/admin/activity">Scoring activity</a>
+      </nav>
+      <div class="sidebar-note"><strong>Isolated prototype</strong><p>Monitoring and photo uploads affect only the private admin database.</p></div>
+      <a class="public-link" href="http://127.0.0.1:8000/map" target="_blank" rel="noopener">Open local public map<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M19 13v6H5V5h6"/></svg></a>
+    </aside>
+    <main id="admin-main" class="admin-main">
+      <section class="isolation-banner" role="note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.7 3.1 7.9 7.5 9.5 4.4-1.6 7.5-4.8 7.5-9.5V6L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg><div><strong>Safe development environment</strong><span>Monitoring a private database copy. Production and the port 8000 application are not connected.</span></div></section>
+      <div id="dashboard-status" class="dashboard-status" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span>Loading overview…</div>
+      <div id="dashboard-error" class="dashboard-error" role="alert" hidden><strong>Dashboard data could not be loaded</strong><p id="dashboard-error-message"></p><button id="retry-dashboard" type="button">Try again</button></div>
+      <div id="dashboard-content" hidden>
+        <section class="dashboard-section overview-section" aria-labelledby="overview-title">
+          <div class="section-heading"><div><p class="eyebrow">Operational monitoring</p><h1 id="overview-title">System overview</h1></div><p id="last-updated">Waiting for data</p></div>
+          <div class="summary-grid six">
+            <article class="summary-card status-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.7 3.1 7.9 7.5 9.5 4.4-1.6 7.5-4.8 7.5-9.5V6L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></div><span>System status</span><strong id="metric-system">Checking</strong><small id="metric-system-detail">Reading local dependencies</small></article>
+            <article class="summary-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 8-4 8 4-8 4-8-4Zm0 5 8 4 8-4M4 17l8 4 8-4"/></svg></div><span>Required hazards</span><strong id="metric-hazards">—</strong><small>Locally loaded datasets</small></article>
+            <article class="summary-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div><span>Unique visitors</span><strong id="metric-visitors">—</strong><small>Anonymous browser identifiers</small></article>
+            <article class="summary-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><span>Online now</span><strong id="metric-online">—</strong><small>Active within five minutes</small></article>
+            <article class="summary-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V9l7-5 7 5v11M3 20h18M9 13h6M9 17h6"/></svg></div><span>Evacuation centers</span><strong id="metric-centers">—</strong><small id="metric-centers-detail">Active designated facilities</small></article>
+            <article class="summary-card"><div class="card-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5V3Zm3 5h8M8 12h3m2 0h3M8 16h8"/></svg></div><span>Saved scores</span><strong id="metric-scores">—</strong><small id="metric-scores-detail">Complete and incomplete</small></article>
+          </div>
+        </section>
+        <section class="dashboard-section" aria-labelledby="attention-title"><div class="section-heading compact"><div><p class="eyebrow">Action queue</p><h2 id="attention-title">Needs attention</h2></div><span id="alert-summary" class="section-badge">0 notices</span></div><div id="alert-list" class="alert-list"></div></section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

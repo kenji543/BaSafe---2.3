@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#083d38">
+  <title>Administrator sign in | Basafe</title>
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/admin/admin.css?v=0.3.0">
+  <script defer src="/admin/login.js?v=0.3.0"></script>
+</head>
+<body class="admin-login-body">
+  <a class="skip-link" href="#login-form">Skip to sign in</a>
+  <main class="login-shell">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="login-introduction">
+        <a class="login-brand" href="/" aria-label="Basafe public home">
+          <img src="/icons/basafe-logo-256.png" alt="">
+          <span><strong>Basafe</strong><small>Administration</small></span>
+        </a>
+        <div class="login-introduction-copy">
+          <span class="login-environment"><i aria-hidden="true"></i>Local administrative workspace</span>
+          <p class="eyebrow">Protected access</p>
+          <h1>Manage Basafe with confidence.</h1>
+          <p>Monitor local data, review public usage, and maintain evacuation-center information from one protected workspace.</p>
+        </div>
+        <ul class="login-feature-list" aria-label="Administration features">
+          <li><span aria-hidden="true">✓</span>Private local data environment</li>
+          <li><span aria-hidden="true">✓</span>Anonymous visitor monitoring</li>
+          <li><span aria-hidden="true">✓</span>Audited facility photo uploads</li>
+        </ul>
+      </div>
+
+      <div class="login-form-panel">
+        <div class="login-form-heading">
+          <p class="eyebrow">Administrator access</p>
+          <h2 id="login-title">Sign in to continue</h2>
+          <p>Use the local administrator credentials configured for this environment.</p>
+        </div>
+        <div id="login-notice" class="login-notice" role="status" hidden></div>
+        <form id="login-form" novalidate>
+          <label for="login-username">Username</label>
+          <div class="login-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>
+            <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required placeholder="Administrator username">
+          </div>
+          <label for="login-password">Password</label>
+          <div class="login-field password-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="Administrator password">
+            <button id="toggle-password" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+          <div id="login-error" class="login-error" role="alert" hidden></div>
+          <button id="login-submit" class="login-submit" type="submit">
+            <span>Sign in securely</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6M15 12H3M21 3v18"/></svg>
+          </button>
+        </form>
+        <p class="login-security-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.5c0 4.7 3.1 7.9 7.5 9.5 4.4-1.6 7.5-4.8 7.5-9.5V6L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg>Your password is sent only to the local server. Basafe does not save it in browser storage.</p>
+        <a class="login-public-link" href="http://127.0.0.1:8000/">Return to the public application</a>
+        <noscript><p class="login-error">JavaScript is required to use the administrator sign-in page.</p></noscript>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -52,6 +52,9 @@ class StrictScopeTests(unittest.TestCase):
                     "routing_study_areas",
                     "evacuation_centers",
                     "searchable_locations",
+                    "visitor_sessions",
+                    "visitor_events",
+                    "admin_audit_log",
                 },
             )
         finally:

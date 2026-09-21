@@ -3,20 +3,27 @@
 from __future__ import annotations
 
 import argparse
+import hmac
+import json
 import logging
 import mimetypes
 import os
 import re
+import secrets
 import shutil
 import sys
 import threading
 import time
 from collections import defaultdict, deque
+from email import policy
+from email.parser import BytesParser
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from .admin import AdminDashboard, AdminOperationError
 from .api import Api, Response
 from .fuzzy import FuzzyModel
 from .repository import Repository
@@ -28,7 +35,18 @@ from .ulap.integration import UlapIntegration
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOGGER = logging.getLogger("geosafe")
 MAX_REQUEST_BYTES = 1_048_576
+ADMIN_MAX_REQUEST_BYTES = 6 * 1_048_576
 RATE_LIMIT_WINDOW_SECONDS = 60
+PUBLIC_PAGE_PATHS = {
+    "/",
+    "/map",
+    "/methodology",
+    "/data-sources",
+    "/limitations",
+    "/about",
+    "/privacy",
+    "/offline",
+}
 
 
 def _environment_flag(name: str, default: bool = False) -> bool:
@@ -76,20 +94,77 @@ class GeoSafeServer(ThreadingHTTPServer):
         self.assessment_rate_limit = _environment_positive_int(
             "GEOSAFE_ASSESSMENTS_PER_MINUTE", 12
         )
+        self.admin_enabled = _environment_flag(
+            "GEOSAFE_ADMIN_ENABLED", default=False
+        )
+        self.admin_username = os.environ.get("GEOSAFE_ADMIN_USERNAME", "")
+        self.admin_password = os.environ.get("GEOSAFE_ADMIN_PASSWORD", "")
+        self.admin_login_rate_limit = _environment_positive_int(
+            "GEOSAFE_ADMIN_LOGIN_ATTEMPTS_PER_MINUTE", 10
+        )
+        self.admin_session_ttl_seconds = 60 * _environment_positive_int(
+            "GEOSAFE_ADMIN_SESSION_MINUTES", 480
+        )
+        self.visitor_analytics_enabled = _environment_flag(
+            "GEOSAFE_VISITOR_ANALYTICS_ENABLED", default=False
+        )
+        if self.admin_enabled and not (
+            self.admin_username and self.admin_password
+        ):
+            raise ValueError(
+                "GEOSAFE_ADMIN_USERNAME and GEOSAFE_ADMIN_PASSWORD are required "
+                "when GEOSAFE_ADMIN_ENABLED is true."
+            )
+        self.admin_dashboard = AdminDashboard(
+            api.service.repository,
+            api.service,
+            uploads_root=os.environ.get("GEOSAFE_ADMIN_UPLOAD_ROOT"),
+        )
         self._rate_limit_lock = threading.Lock()
         self._rate_limit_windows: dict[
             tuple[str, str], deque[float]
         ] = defaultdict(deque)
+        self._admin_session_lock = threading.Lock()
+        self._admin_sessions: dict[str, float] = {}
         super().__init__(server_address, GeoSafeRequestHandler)
+
+    def create_admin_session(self) -> str:
+        token = secrets.token_urlsafe(32)
+        now = time.monotonic()
+        with self._admin_session_lock:
+            self._admin_sessions = {
+                key: expiry
+                for key, expiry in self._admin_sessions.items()
+                if expiry > now
+            }
+            self._admin_sessions[token] = now + self.admin_session_ttl_seconds
+        return token
+
+    def validate_admin_session(self, token: str) -> bool:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
+            return False
+        now = time.monotonic()
+        with self._admin_session_lock:
+            expiry = self._admin_sessions.get(token, 0)
+            if expiry <= now:
+                self._admin_sessions.pop(token, None)
+                return False
+            self._admin_sessions[token] = now + self.admin_session_ttl_seconds
+        return True
+
+    def revoke_admin_session(self, token: str) -> None:
+        with self._admin_session_lock:
+            self._admin_sessions.pop(token, None)
 
     def check_rate_limit(
         self, client_ip: str, bucket: str
     ) -> tuple[bool, int, int, int]:
-        limit = (
-            self.assessment_rate_limit
-            if bucket == "assessment"
-            else self.api_rate_limit
-        )
+        if bucket == "assessment":
+            limit = self.assessment_rate_limit
+        elif bucket == "admin_login":
+            limit = self.admin_login_rate_limit
+        else:
+            limit = self.api_rate_limit
         now = time.monotonic()
         cutoff = now - RATE_LIMIT_WINDOW_SECONDS
         key = (client_ip, bucket)
@@ -136,14 +211,322 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             ),
             **response.headers,
         }
+        visitor_cookie = getattr(self, "_visitor_cookie", None)
+        if visitor_cookie and "Set-Cookie" not in headers:
+            headers["Set-Cookie"] = visitor_cookie
         for name, value in headers.items():
             self.send_header(name, value)
         self.end_headers()
         if not head_only and response.body:
             self.wfile.write(response.body)
 
+    def _is_admin_path(self) -> bool:
+        path = urlsplit(self.path).path.rstrip("/") or "/"
+        return path == "/admin" or path.startswith("/admin/") or path.startswith(
+            "/api/v1/admin/"
+        )
+
+    def _admin_authorized(self) -> bool:
+        token = self._admin_session_token()
+        return bool(token and self.server.validate_admin_session(token))
+
+    def _admin_session_token(self) -> str:
+        cookies = SimpleCookie()
+        try:
+            cookies.load(self.headers.get("Cookie", ""))
+        except Exception:
+            return ""
+        session = cookies.get("basafe_admin_session")
+        return session.value if session else ""
+
+    def _admin_session_cookie(self, token: str = "", *, clear: bool = False) -> str:
+        secure = " Secure;" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        max_age = 0 if clear else self.server.admin_session_ttl_seconds
+        return (
+            f"basafe_admin_session={token}; Path=/; Max-Age={max_age};"
+            f" HttpOnly; SameSite=Strict;{secure}"
+        )
+
+    def _guard_admin(self) -> bool:
+        if not self._is_admin_path():
+            return True
+        path = urlsplit(self.path).path.rstrip("/") or "/"
+        if not self.server.admin_enabled:
+            self._send(
+                Response.json(
+                    {"error": {"code": "not_found", "message": "Page not found."}},
+                    status=404,
+                )
+            )
+            return False
+        if path in {
+            "/admin/login",
+            "/admin/admin.css",
+            "/admin/login.js",
+            "/api/v1/admin/login",
+        }:
+            return True
+        if self._admin_authorized():
+            return True
+        if path.startswith("/admin"):
+            self._send(
+                Response(
+                    302,
+                    b"",
+                    {
+                        "Location": "/admin/login",
+                        "Content-Length": "0",
+                        "Cache-Control": "no-store",
+                    },
+                )
+            )
+            return False
+        self._send(
+            Response.json(
+                {
+                    "error": {
+                        "code": "admin_authentication_required",
+                        "message": "Administrator authentication is required.",
+                    }
+                },
+                status=401,
+                headers={"Cache-Control": "no-store"},
+            )
+        )
+        return False
+
+    def _admin_login_response(self, method: str) -> Response:
+        if method != "POST":
+            return Response.json(
+                {
+                    "error": {
+                        "code": "method_not_allowed",
+                        "message": "Use POST to sign in.",
+                    }
+                },
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        allowed, limit, remaining, retry_after = self.server.check_rate_limit(
+            self.client_address[0], "admin_login"
+        )
+        if not allowed:
+            return Response.json(
+                {
+                    "error": {
+                        "code": "too_many_login_attempts",
+                        "message": "Too many sign-in attempts. Wait before trying again.",
+                    }
+                },
+                status=429,
+                headers={
+                    "Retry-After": str(retry_after),
+                    "RateLimit-Limit": str(limit),
+                    "RateLimit-Remaining": str(remaining),
+                },
+            )
+        raw_length = self.headers.get("Content-Length")
+        try:
+            content_length = int(raw_length or "0")
+        except ValueError:
+            content_length = -1
+        if content_length <= 0 or content_length > 8_192:
+            return Response.json(
+                {
+                    "error": {
+                        "code": "invalid_login_request",
+                        "message": "Enter an administrator username and password.",
+                    }
+                },
+                status=400,
+            )
+        try:
+            payload = json.loads(self.rfile.read(content_length))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return Response.json(
+                {
+                    "error": {
+                        "code": "invalid_login_request",
+                        "message": "The sign-in request could not be read.",
+                    }
+                },
+                status=400,
+            )
+        username = str(payload.get("username", "")) if isinstance(payload, dict) else ""
+        password = str(payload.get("password", "")) if isinstance(payload, dict) else ""
+        username_matches = hmac.compare_digest(username, self.server.admin_username)
+        password_matches = hmac.compare_digest(password, self.server.admin_password)
+        if not (username_matches and password_matches):
+            return Response.json(
+                {
+                    "error": {
+                        "code": "invalid_credentials",
+                        "message": "The username or password is incorrect.",
+                    }
+                },
+                status=401,
+            )
+        token = self.server.create_admin_session()
+        return Response.json(
+            {"authenticated": True, "redirect": "/admin"},
+            headers={"Set-Cookie": self._admin_session_cookie(token)},
+        )
+
+    def _admin_logout_response(self, method: str) -> Response:
+        if method != "POST":
+            return Response.json(
+                {
+                    "error": {
+                        "code": "method_not_allowed",
+                        "message": "Use POST to sign out.",
+                    }
+                },
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        token = self._admin_session_token()
+        if token:
+            self.server.revoke_admin_session(token)
+        return Response.json(
+            {"authenticated": False, "redirect": "/admin/login"},
+            headers={"Set-Cookie": self._admin_session_cookie(clear=True)},
+        )
+
+    def _record_public_page_view(self) -> None:
+        if not self.server.visitor_analytics_enabled:
+            return
+        path = urlsplit(self.path).path.rstrip("/") or "/"
+        if path not in PUBLIC_PAGE_PATHS:
+            return
+        cookies = SimpleCookie()
+        try:
+            cookies.load(self.headers.get("Cookie", ""))
+        except Exception:
+            cookies = SimpleCookie()
+        visitor_id = cookies.get("basafe_visitor_id")
+        visitor_value = visitor_id.value if visitor_id else ""
+        if not re.fullmatch(r"[A-Za-z0-9_-]{20,64}", visitor_value):
+            visitor_value = secrets.token_urlsafe(24)
+            secure = " Secure;" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+            self._visitor_cookie = (
+                f"basafe_visitor_id={visitor_value}; Path=/; Max-Age=31536000;"
+                f" HttpOnly; SameSite=Lax;{secure}"
+            )
+        self.server.admin_dashboard.record_visitor(visitor_value, path)
+
+    @staticmethod
+    def _multipart_fields(
+        content_type: str, body: bytes
+    ) -> tuple[bytes, dict[str, str]]:
+        if not content_type.casefold().startswith("multipart/form-data"):
+            raise AdminOperationError(
+                "multipart_required",
+                "Upload the photograph using multipart form data.",
+            )
+        message = BytesParser(policy=policy.default).parsebytes(
+            b"Content-Type: "
+            + content_type.encode("utf-8")
+            + b"\r\nMIME-Version: 1.0\r\n\r\n"
+            + body
+        )
+        if not message.is_multipart():
+            raise AdminOperationError(
+                "invalid_multipart", "The upload form could not be read."
+            )
+        photo = b""
+        fields: dict[str, str] = {}
+        for part in message.iter_parts():
+            name = part.get_param("name", header="content-disposition")
+            if not name:
+                continue
+            payload = part.get_payload(decode=True) or b""
+            if name == "photo":
+                photo = payload
+            else:
+                try:
+                    fields[name] = payload.decode("utf-8")[:1000]
+                except UnicodeDecodeError as exc:
+                    raise AdminOperationError(
+                        "invalid_form_text", "The upload details must use UTF-8 text."
+                    ) from exc
+        return photo, fields
+
+    @staticmethod
+    def _admin_error_response(error: AdminOperationError) -> Response:
+        return Response.json(
+            {"error": {"code": error.code, "message": str(error)}},
+            status=error.status,
+        )
+
     def _api_response(self, method: str) -> Response:
         split = urlsplit(self.path)
+        normalized_path = split.path.rstrip("/") or "/"
+        if normalized_path == "/api/v1/admin/login":
+            return self._admin_login_response(method)
+        if normalized_path == "/api/v1/admin/logout":
+            return self._admin_logout_response(method)
+        if normalized_path == "/api/v1/admin/overview":
+            if method != "GET":
+                return Response.json(
+                    {
+                        "error": {
+                            "code": "method_not_allowed",
+                            "message": "The admin monitoring endpoint is read-only.",
+                        }
+                    },
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            return Response.json(self.server.admin_dashboard.overview())
+        if normalized_path == "/api/v1/admin/analytics":
+            if method != "GET":
+                return Response.json(
+                    {"error": {"code": "method_not_allowed", "message": "Visitor analytics is read-only."}},
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            query = parse_qs(split.query, keep_blank_values=True)
+            try:
+                days = int((query.get("days") or ["7"])[-1])
+            except ValueError:
+                days = 7
+            return Response.json(self.server.admin_dashboard.analytics(days))
+        photo_file_match = re.fullmatch(
+            r"/api/v1/admin/evacuation-centers/(\d+)/photo/([^/]+)",
+            normalized_path,
+        )
+        if photo_file_match:
+            if method != "GET":
+                return Response.json(
+                    {"error": {"code": "method_not_allowed", "message": "The photograph resource is read-only."}},
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            try:
+                content, mime_type = self.server.admin_dashboard.evacuation_center_photo(
+                    int(photo_file_match.group(1)), photo_file_match.group(2)
+                )
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
+            return Response(
+                200,
+                content,
+                {
+                    "Content-Type": mime_type,
+                    "Content-Length": str(len(content)),
+                    "Cache-Control": "private, max-age=3600",
+                },
+            )
+        photo_upload_match = re.fullmatch(
+            r"/api/v1/admin/evacuation-centers/(\d+)/photo",
+            normalized_path,
+        )
+        if photo_upload_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to upload a facility photograph."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
         bucket = (
             "assessment"
             if method == "POST"
@@ -198,17 +581,40 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                     },
                     status=400,
                 )
-            if content_length < 0 or content_length > MAX_REQUEST_BYTES:
+            request_limit = (
+                ADMIN_MAX_REQUEST_BYTES if photo_upload_match else MAX_REQUEST_BYTES
+            )
+            if content_length < 0 or content_length > request_limit:
                 return Response.json(
                     {
                         "error": {
                             "code": "request_too_large",
-                            "message": "Request body exceeds the 1 MiB limit.",
+                            "message": (
+                                "Photo upload exceeds the 6 MiB request limit."
+                                if photo_upload_match
+                                else "Request body exceeds the 1 MiB limit."
+                            ),
                         }
                     },
                     status=413,
                 )
             body = self.rfile.read(content_length)
+        if photo_upload_match:
+            try:
+                photo, fields = self._multipart_fields(
+                    self.headers.get("Content-Type", ""), body
+                )
+                payload = self.server.admin_dashboard.upload_evacuation_center_photo(
+                    int(photo_upload_match.group(1)),
+                    photo,
+                    alt_text=fields.get("alt_text"),
+                    source=fields.get("source"),
+                    source_url=fields.get("source_url"),
+                    actor=self.server.admin_username,
+                )
+                return Response.json(payload, status=201)
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
         return self.server.api.dispatch(
             method,
             split.path,
@@ -221,6 +627,22 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
         route = split.path
         aliases = {
             "/": "index.html",
+            "/admin/login": "admin/login.html",
+            "/admin/login/": "admin/login.html",
+            "/admin": "admin/index.html",
+            "/admin/": "admin/index.html",
+            "/admin/analytics": "admin/analytics.html",
+            "/admin/analytics/": "admin/analytics.html",
+            "/admin/datasets": "admin/datasets.html",
+            "/admin/datasets/": "admin/datasets.html",
+            "/admin/evacuation-centers": "admin/evacuation-centers.html",
+            "/admin/evacuation-centers/": "admin/evacuation-centers.html",
+            "/admin/routing": "admin/routing.html",
+            "/admin/routing/": "admin/routing.html",
+            "/admin/context": "admin/context.html",
+            "/admin/context/": "admin/context.html",
+            "/admin/activity": "admin/activity.html",
+            "/admin/activity/": "admin/activity.html",
             "/map": "map.html",
             "/map/": "map.html",
             "/methodology": "methodology.html",
@@ -293,6 +715,8 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
         )
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._guard_admin():
+            return
         if urlsplit(self.path).path.startswith("/api/"):
             try:
                 self._send(self._api_response("GET"))
@@ -310,9 +734,12 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                     )
                 )
         else:
+            self._record_public_page_view()
             self._serve_static()
 
     def do_HEAD(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._guard_admin():
+            return
         if urlsplit(self.path).path.startswith("/api/"):
             self._send(
                 Response.json(
@@ -331,6 +758,8 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             self._serve_static(head_only=True)
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._guard_admin():
+            return
         if not urlsplit(self.path).path.startswith("/api/"):
             self._send(
                 Response.json(
@@ -362,6 +791,8 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             )
 
     def do_OPTIONS(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if not self._guard_admin():
+            return
         self._send(self._api_response("OPTIONS"))
 
     def log_message(self, format_string: str, *args: object) -> None:
@@ -474,11 +905,12 @@ def main() -> None:
     server = GeoSafeServer((args.host, args.port), api, Path(args.web_root))
     LOGGER.info(
         "Basafe %s listening at http://%s:%s "
-        "(runtime data mode: %s; unified interface; no user roles)",
+        "(runtime data mode: %s; admin monitoring: %s)",
         model.version,
         args.host,
         args.port,
         api.service.runtime_data_mode,
+        "enabled" if server.admin_enabled else "disabled",
     )
     try:
         server.serve_forever()
