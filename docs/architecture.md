@@ -19,24 +19,31 @@ Every feature must directly support at least one of the following:
 - data-quality communication;
 - planning-oriented recommendations; or
 - report generation.
-- town-proper pedestrian evacuation-route comparison using frozen local data.
+- pedestrian evacuation-route comparison, within the loaded routing study area, using frozen local data.
 
 Anything that fails this scope gate is not part of the application.
 
 ## 2. Explicit exclusions
 
-The prototype has one unified interface and does not implement:
+These exclusions describe the **public-facing product**: the unified
+interface reachable by ordinary users at the deployed origin. The prototype's
+public product has one unified interface and does not implement:
 
 - administrators, analysts, technical staff, planning viewers, public viewers, or any other user type;
 - user registration, multiple accounts, users, roles, permissions, or role-based access control;
 - account approval, dataset approval, or publication workflows;
-- administrative, staff, or office-specific dashboards;
-- user activity monitoring, permission matrices, or application audit-log screens;
-- browser-based dataset or fuzzy-model management;
+- staff or office-specific dashboards for the public product;
+- user activity monitoring, permission matrices, or application audit-log screens exposed to end users;
+- browser-based dataset or fuzzy-model management reachable from the public product;
 - a general-purpose content-management system; or
 - separate interfaces for municipal offices.
 
-Authentication is not a core requirement and the initial prototype is unauthenticated. If a later deployment requires basic perimeter protection, a single shared password may be read from an environment variable. That optional protection is not implemented in the initial prototype and must not introduce registration, multiple accounts, roles, permissions, user tables, or management pages.
+Authentication is not a core requirement of the public product and the initial prototype is unauthenticated there. If a later deployment requires basic perimeter protection for the public product, a single shared password may be read from an environment variable. That optional protection is not implemented in the initial prototype and must not introduce registration, multiple accounts, roles, permissions, user tables, or management pages in the public product.
+
+Section 3.1 documents a separate, isolated, local-only operator dashboard used
+for development visibility. It is not part of the public product, is not
+reachable from the public origin or the Vercel deployment, and does not
+relax any exclusion above for the public product itself.
 
 ## 3. System context
 
@@ -50,13 +57,66 @@ The target implementation intentionally uses a small number of components:
 | SQLite database | Approved spatial records, provenance, fuzzy configuration records where seeded, assessments, explanations, and generated-report metadata |
 | Version-controlled fuzzy configuration | `config/fuzzy_model.json`: model variables, membership functions, rules, weights, outputs, thresholds, defuzzification method, version, and validation notes |
 | Command-line import utilities | Validate, transform, and load deployment datasets while recording provenance and errors |
-| Local routing service | Load a frozen town-proper walking graph, compare shortest and mapped-hazard-aware A* routes to every reachable designated center, and return stateless GeoJSON plus reproducibility metadata |
+| Local routing service | Load a frozen walking graph for the active routing study area, compare shortest and mapped-hazard-aware A* routes to every reachable designated center, and return stateless GeoJSON plus reproducibility metadata |
 | Local OSM search service | Rank normalized street/POI records stored from the same frozen walking-network synchronization and return inspectable GeoJSON without runtime geocoding |
 | PDF report renderer | Produce a repeatable assessment document containing the result, explanation, sources, quality notices, limitations, and disclaimer |
+| Local admin dashboard *(isolated, not part of the public product; see 3.1)* | Read-mostly operational visibility for a local developer: dataset/routing/context inventory, visitor analytics, evacuation-center photo upload |
 
 The browser is a client of the JSON API. It does not call ULAP directly, contain authoritative hazard values, expose an ArcGIS token, or independently calculate the final score. The API validates live source metadata, resolves the selected point, obtains available source records, applies the exact configured model only when all required inputs are valid, and persists enough detail to reproduce the explanation.
 
+### 3.1 Local admin dashboard (isolated developer tool)
+
+A local, read-mostly operational dashboard gives a developer visibility into
+the running system without becoming part of the public product described
+elsewhere in this document. It is implemented by `geosafe/admin.py` and
+`web/admin/` and documented operationally in
+[admin-development.md](admin-development.md). It is deliberately excluded
+from the scope gate in Section 1 and from the public interface in Section 4:
+it exists to inspect the local worktree, not to extend what end users can
+reach.
+
+Isolation boundaries:
+
+- Runs in the same local development worktree, on its own port
+  (`http://127.0.0.1:8001/admin` by default), started only by
+  `scripts/run_admin_dev.ps1`.
+- Reads and writes its own private, gitignored SQLite database
+  (`data/admin-dev.db`), copied once from the bundled snapshot. It never
+  connects to the public local application on port 8000, to the public
+  Vercel deployment, or to `data/geosafe.db`.
+- Uses server-side session cookies (random session id, HTTP-only, SameSite,
+  eight-hour inactivity expiry, invalidated on restart, rate-limited sign-in)
+  gated behind `/admin/login`. This authentication model is specific to the
+  admin dashboard; it does not apply to, and is not required by, the public
+  product's unauthenticated design in Section 2.
+- Enabled only in the isolated environment; visitor analytics additionally
+  require `GEOSAFE_VISITOR_ANALYTICS_ENABLED=true`.
+
+Pages, each a dedicated authenticated route: `/admin` (overview/action
+queue), `/admin/analytics` (anonymous visitor counts and a seven-day
+activity graph, keyed by a random first-party browser identifier — no
+accounts, no raw IP persistence), `/admin/datasets` (hazard dataset
+inventory), `/admin/evacuation-centers` (facility inventory and photo
+upload), `/admin/routing` (routing dependency and study-area status),
+`/admin/context` (historical incident, CLUP, barangay, and boundary counts),
+and `/admin/activity` (recent scoring activity).
+
+The dashboard deliberately does not implement dataset activation, record
+deletion, or production synchronization; those remain command-line
+operator actions (Section 3, "Command-line import utilities") pending
+managed authentication, roles, versioned staging, validation, backup, and
+rollback design suitable for a networked deployment. A remotely hosted
+administration system would additionally need HTTPS, managed accounts,
+role-based authorization, password recovery, persistent session storage,
+CSRF protection, and an auditable identity provider — none of which this
+local tool provides or claims to.
+
 ## 4. Approved pages
+
+Sections 4–10 below describe the public product only. The local admin
+dashboard (Section 3.1) has its own pages, API surface, and database, and is
+out of scope for the approved-pages list, the API boundaries in Section 8,
+and the database table list in Section 7.
 
 The static application exposes only these project pages or panels:
 
@@ -155,17 +215,35 @@ Only tables directly required by approved functions are allowed:
 | `assessment_rule_activations` | Rule snapshot, unweighted firing strength, weight, and effective activation |
 | `assessment_results` | Score/category when complete, completeness reasons, recommendations, and disclaimer version |
 | `generated_reports` | Assessment link, PDF checksum, generation time, and the assessment snapshot used for that generation |
-| `routing_study_areas` | Versioned town-proper routing polygon and source authority metadata |
+| `routing_study_areas` | Versioned routing-boundary polygon(s) and source authority metadata; the active row (currently the full Basey municipal boundary) sets the routing scope |
 | `searchable_locations` | Normalized OSM street/POI search records, geometry, snapshot date, and provenance |
 | `evacuation_centers` | Researcher/LGU-supplied designated centers, coordinates, designation, provenance, version, and optional capacity |
+| `visitor_sessions`, `visitor_events` | Aggregate, non-identifying visitor counts (random first-party id, path, timestamps) read only by the isolated admin dashboard's analytics page (Section 3.1); not read by any public-product API |
+| `admin_audit_log` | Local admin-dashboard action log (actor, action, entity, timestamp); not read by any public-product API |
 
 Foreign keys are enabled. Imports and assessments use transactions. Provenance and model snapshots prevent a later data or configuration update from silently changing an existing assessment explanation.
 
-There are deliberately no `users`, `roles`, `user_roles`, `permissions`, `staff_profiles`, `user_sessions`, `administrative_approvals`, or user audit-log tables. A lightweight server error log may exist only for technical diagnosis and is not an application feature.
+`visitor_sessions`, `visitor_events`, and `admin_audit_log` are defined in
+the same shared `db/schema.sql` as every table above, so they exist in every
+database this schema initializes, including `data/geosafe.db`. They exist
+solely to support the isolated admin dashboard (Section 3.1); no public API
+endpoint or public page reads or writes them, and they carry no user
+identity, role, or permission semantics — they are the dashboard's own
+operational log, not a reintroduction of the excluded audit/permission
+concepts in Section 2.
+
+There are deliberately no `users`, `roles`, `user_roles`, `permissions`, `staff_profiles`, `user_sessions`, or `administrative_approvals` tables. A lightweight server error log may exist only for technical diagnosis and is not an application feature.
 
 ## 8. API boundaries
 
-The API is versioned under `/api/v1` and limited to:
+This section describes the public product's API. The isolated admin
+dashboard (Section 3.1) exposes its own separate, session-authenticated
+routes under `/admin/*`, documented in
+[admin-development.md](admin-development.md), not under `/api/v1` and not
+reachable from the public origin/deployment; they are not part of this
+boundary.
+
+The public API is versioned under `/api/v1` and limited to:
 
 - live-source status: ULAP service summaries and validated metadata;
 - map and spatial data: Basey boundary, barangays, hazard layers/features, search, identify, and hazards at a point;
@@ -176,9 +254,9 @@ Detailed application contracts are in [api.md](api.md). Live-source architecture
 field mappings, failures, and gaps are documented in
 [ulap-integration.md](ulap-integration.md),
 [ulap-field-mappings.md](ulap-field-mappings.md), and
-[known-data-gaps.md](known-data-gaps.md). There are no authentication, account,
-role, permission, staff, administration, approval, audit, upload, or
-model-editor API groups.
+[known-data-gaps.md](known-data-gaps.md). Within this public boundary there
+are no authentication, account, role, permission, staff, administration,
+approval, audit, upload, or model-editor API groups.
 
 ## 9. Fuzzy engine boundary
 
@@ -226,14 +304,19 @@ Report preview and PDF content are contract-tested so material warnings cannot d
   external geocoder or Overpass at runtime.
 - Report filenames are server controlled and cannot be supplied as arbitrary filesystem paths.
 - Import utilities, not the browser, are the trusted data-management boundary.
+- The local admin dashboard (Section 3.1) is a separate trust boundary: it is
+  the one part of the codebase with accounts and sessions, and that
+  authentication model applies only there. It must remain unreachable from
+  the public origin/deployment and must not read or write `data/geosafe.db`.
 
 ## 12. Architecture tests and scope control
 
 The current standard-library `unittest` suite covers:
 
 - schema initialization produces exactly the approved application tables;
-- endpoint scope checks reject identity and administrative API families;
-- no approved page, table, or tested API path introduces roles, users, permissions, admin portals, approvals, or browser uploads;
+- endpoint scope checks reject identity and administrative API families from the public product;
+- no approved public page, public table, or tested public API path introduces roles, users, permissions, admin portals, approvals, or browser uploads (`tests/test_scope.py`);
+- the local admin dashboard's own isolation: its routes, session cookies, and rate limiting behave as documented, and it stays off the public API/page allowlists above (`tests/test_admin_dashboard.py`);
 - point containment and barangay identification;
 - the presence of all three selection controls and approved frontend API references;
 - hazard/context retrieval and provenance;
