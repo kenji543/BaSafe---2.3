@@ -56,6 +56,7 @@ class HttpServerTests(unittest.TestCase):
             "/about",
             "/privacy",
             "/offline",
+            "/report-damage",
             "/manifest.webmanifest",
             "/service-worker.js",
         ):
@@ -112,6 +113,111 @@ class HttpServerTests(unittest.TestCase):
         self.assertEqual(limit, self.server.assessment_rate_limit)
         self.assertEqual(remaining, 0)
         self.assertGreaterEqual(retry_after, 1)
+
+    def _post_report(self, fields: dict[str, str], photos: list[bytes] = ()):
+        boundary = "----BasafeReportBoundary"
+        parts = [
+            f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
+            for name, value in fields.items()
+        ]
+        for photo in photos:
+            parts.append(
+                f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="p.jpg"\r\n'
+                "Content-Type: image/jpeg\r\n\r\n".encode()
+                + photo
+                + b"\r\n"
+            )
+        parts.append(f"--{boundary}--\r\n".encode())
+        request = Request(
+            f"{self.base_url}/api/v1/reports",
+            data=b"".join(parts),
+            method="POST",
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                return response.status, json.load(response)
+        except HTTPError as error:
+            return error.code, json.load(error)
+
+    REPORT = {
+        "latitude": "11.5",
+        "longitude": "125.25",
+        "damage_type": "flooding",
+        "severity": "severe",
+        "people_affected": "4",
+        "street": "Rizal St.",
+        "reporter_name": "Juan Dela Cruz",
+        "reporter_phone": "0917 123 4567",
+        "consent": "yes",
+    }
+
+    def test_citizen_report_is_stored_with_barangay_and_clean_photo(self) -> None:
+        from io import BytesIO
+
+        from PIL import Image
+
+        exif = Image.Exif()
+        exif[0x010F] = "TestCamera"  # Make
+        exif[0x0112] = 6  # Orientation: rotate 90 -- a portrait phone photo
+        source = BytesIO()
+        Image.new("RGB", (40, 20), "red").save(source, "JPEG", exif=exif)
+
+        status, payload = self._post_report(self.REPORT, [source.getvalue()])
+        self.assertEqual(status, 201, payload)
+        self.assertEqual(payload["barangay"], "Test West")
+        with self.application.repository.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM citizen_reports WHERE id = ?", (payload["id"],)
+            ).fetchone()
+        self.assertEqual(row["reporter_phone"], "09171234567")
+        self.assertEqual(row["status"], "new")
+        self.assertTrue(row["created_at"].endswith("+00:00"))
+        [filename] = json.loads(row["photos_json"])
+        stored = self.server.admin_dashboard.uploads_root / "citizen-reports" / filename
+        with Image.open(stored) as image:
+            self.assertEqual(len(image.getexif()), 0)
+            self.assertEqual(image.size, (20, 40))
+
+    def test_citizen_report_rejections(self) -> None:
+        for fields, status, code in (
+            ({**self.REPORT, "latitude": "13.5"}, 422, "outside_basey"),
+            ({**self.REPORT, "reporter_phone": "call me"}, 400, "invalid_phone"),
+            ({**self.REPORT, "consent": ""}, 400, "consent_required"),
+            ({**self.REPORT, "severity": "apocalyptic"}, 400, "invalid_severity"),
+        ):
+            with self.subTest(code=code):
+                actual_status, payload = self._post_report(fields)
+                self.assertEqual(actual_status, status)
+                self.assertEqual(payload["error"]["code"], code)
+        status, payload = self._post_report(self.REPORT, [b"not an image"])
+        self.assertEqual((status, payload["error"]["code"]), (400, "invalid_photo"))
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(f"{self.base_url}/api/v1/reports", timeout=5)
+        self.assertEqual(caught.exception.code, 405)
+
+    def test_report_rate_limit_has_its_own_bucket(self) -> None:
+        client = "203.0.113.78"
+        for _ in range(self.server.report_rate_limit):
+            self.assertTrue(self.server.check_rate_limit(client, "report")[0])
+        self.assertFalse(self.server.check_rate_limit(client, "report")[0])
+        self.assertTrue(self.server.check_rate_limit(client, "api")[0])
+
+    def test_vercel_entry_point_refuses_reports(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "vercel_index", WEB_ROOT.parent / "api" / "index.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        statuses: list[str] = []
+        body = module.app(
+            {"REQUEST_METHOD": "POST", "PATH_INFO": "/api/v1/reports"},
+            lambda status, headers: statuses.append(status),
+        )
+        self.assertEqual(statuses, ["503 Service Unavailable"])
+        self.assertEqual(json.loads(b"".join(body))["error"]["code"], "report_intake_unavailable")
 
 
 if __name__ == "__main__":

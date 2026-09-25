@@ -13,6 +13,7 @@ import colorsys
 import io
 import json
 import math
+import sqlite3
 import sys
 import tempfile
 import urllib.parse
@@ -76,6 +77,51 @@ PEIS_ROMAN = {
 
 class SnapshotSyncError(RuntimeError):
     """A source response was unsafe to activate as a local snapshot."""
+
+
+def _start_sync_run(database_path: Path, target: str) -> int | None:
+    """Record the start of a sync attempt; never blocks the sync on failure."""
+    try:
+        connection = sqlite3.connect(database_path)
+    except sqlite3.Error:
+        return None
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        cursor = connection.execute(
+            "INSERT INTO sync_runs (target, status) VALUES (?, 'in_progress')",
+            (target,),
+        )
+        connection.commit()
+        return cursor.lastrowid
+    except sqlite3.Error:
+        return None
+    finally:
+        connection.close()
+
+
+def _finish_sync_run(
+    database_path: Path, run_id: int | None, *, status: str, error_message: str | None
+) -> None:
+    if run_id is None:
+        return
+    try:
+        connection = sqlite3.connect(database_path)
+    except sqlite3.Error:
+        return
+    try:
+        connection.execute(
+            """
+            UPDATE sync_runs
+            SET finished_at = CURRENT_TIMESTAMP, status = ?, error_message = ?
+            WHERE id = ?
+            """,
+            (status, error_message, run_id),
+        )
+        connection.commit()
+    except sqlite3.Error:
+        pass
+    finally:
+        connection.close()
 
 
 def _download_official_kmz(url: str) -> bytes:
@@ -500,6 +546,7 @@ def synchronize(
     with tempfile.TemporaryDirectory(prefix="geosafe-ulap-sync-") as temporary:
         temporary_path = Path(temporary)
         for target in targets:
+            run_id = _start_sync_run(database_path, target)
             try:
                 if target == "ground_shaking":
                     collection, dataset = _ground_shaking_collection(integration)
@@ -523,6 +570,9 @@ def synchronize(
                     )
                 )
             except (ImportFailure, OSError, SnapshotSyncError) as exc:
+                _finish_sync_run(
+                    database_path, run_id, status="failed", error_message=str(exc)
+                )
                 results.append(
                     {
                         "target": target,
@@ -532,6 +582,9 @@ def synchronize(
                     }
                 )
             else:
+                _finish_sync_run(
+                    database_path, run_id, status="success", error_message=None
+                )
                 results.append(
                     {
                         "target": target,

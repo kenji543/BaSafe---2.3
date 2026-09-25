@@ -55,6 +55,9 @@ class StrictScopeTests(unittest.TestCase):
                     "visitor_sessions",
                     "visitor_events",
                     "admin_audit_log",
+                    "sync_runs",
+                    "hazard_events",
+                    "citizen_reports",
                 },
             )
         finally:

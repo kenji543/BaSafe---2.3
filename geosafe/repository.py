@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,10 @@ def json_value(value: str | None, fallback: Any) -> Any:
         return json.loads(value)
     except (json.JSONDecodeError, TypeError):
         return fallback
+
+
+def _utcnow_isoformat() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 class RepositoryError(RuntimeError):
@@ -59,6 +64,8 @@ class Repository:
             connection.executescript(self.schema_path.read_text(encoding="utf-8"))
             self._ensure_assessment_tokens(connection)
             self._ensure_routing_center_screening_columns(connection)
+            self._ensure_evacuation_center_publish_columns(connection)
+            self._ensure_barangay_designation_columns(connection)
             connection.execute("PRAGMA journal_mode = WAL")
             connection.commit()
         self.model_id = self._synchronize_model(model)
@@ -110,6 +117,43 @@ class Repository:
             if name not in columns:
                 connection.execute(
                     f"ALTER TABLE evacuation_centers ADD COLUMN {name} {declaration}"
+                )
+
+    @staticmethod
+    def _ensure_evacuation_center_publish_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add admin edit/publish tracking fields to older databases."""
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(evacuation_centers)")
+        }
+        for name in ("updated_at", "updated_by", "published_at"):
+            if name not in columns:
+                connection.execute(
+                    f"ALTER TABLE evacuation_centers ADD COLUMN {name} TEXT"
+                )
+
+    @staticmethod
+    def _ensure_barangay_designation_columns(
+        connection: sqlite3.Connection,
+    ) -> None:
+        """Add the admin-managed evacuation-center designation fields to
+        older databases' barangays table."""
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(barangays)")
+        }
+        declarations = {
+            "evacuation_center_id": "INTEGER REFERENCES evacuation_centers(id)",
+            "evacuation_center_assigned_by": "TEXT",
+            "evacuation_center_assigned_at": "TEXT",
+            "evacuation_center_published_at": "TEXT",
+        }
+        for name, declaration in declarations.items():
+            if name not in columns:
+                connection.execute(
+                    f"ALTER TABLE barangays ADD COLUMN {name} {declaration}"
                 )
 
     def _synchronize_model(self, model: FuzzyModel) -> int:
@@ -296,6 +340,96 @@ class Repository:
                 (f"%{escaped}%", f"%{escaped}%", query, f"{escaped}%", limit),
             ).fetchall()
         return [self._barangay_row(row) for row in rows]
+
+    def barangays_with_designations(self) -> list[dict[str, Any]]:
+        """Admin-only view: every barangay joined with its designated
+        evacuation center (if any) and the draft/publish bookkeeping for
+        that designation. Never used by the public API -- includes fields
+        (who assigned it, publish timestamps) that are internal to the
+        admin tool."""
+        with self.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT b.id AS barangay_id, b.name AS barangay_name,
+                       b.psgc_code AS barangay_psgc_code,
+                       b.evacuation_center_id,
+                       b.evacuation_center_assigned_by,
+                       b.evacuation_center_assigned_at,
+                       b.evacuation_center_published_at,
+                       c.id AS center_id, c.external_id AS center_external_id,
+                       c.name AS center_name, c.latitude AS center_latitude,
+                       c.longitude AS center_longitude, c.notes AS center_notes,
+                       c.published_at AS center_published_at
+                FROM barangays b
+                LEFT JOIN evacuation_centers c ON c.id = b.evacuation_center_id
+                ORDER BY b.name COLLATE NOCASE
+                """
+            ).fetchall()
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            center = None
+            if row["evacuation_center_id"] is not None:
+                center = {
+                    "id": row["center_id"],
+                    "external_id": row["center_external_id"],
+                    "name": row["center_name"],
+                    "latitude": row["center_latitude"],
+                    "longitude": row["center_longitude"],
+                    "notes": row["center_notes"],
+                    "published_at": row["center_published_at"],
+                }
+            results.append(
+                {
+                    "barangay_id": row["barangay_id"],
+                    "barangay_name": row["barangay_name"],
+                    "barangay_psgc_code": row["barangay_psgc_code"],
+                    "designated_center": center,
+                    "assigned_by": row["evacuation_center_assigned_by"],
+                    "assigned_at": row["evacuation_center_assigned_at"],
+                    "designation_published_at": row["evacuation_center_published_at"],
+                }
+            )
+        return results
+
+    def set_barangay_evacuation_center(
+        self, barangay_id: int, evacuation_center_id: int, *, actor: str
+    ) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                UPDATE barangays
+                SET evacuation_center_id = ?, evacuation_center_assigned_by = ?,
+                    evacuation_center_assigned_at = ?, evacuation_center_published_at = NULL
+                WHERE id = ?
+                """,
+                (evacuation_center_id, actor, _utcnow_isoformat(), barangay_id),
+            )
+            connection.commit()
+
+    def mark_barangay_designation_published(self, barangay_id: int) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "UPDATE barangays SET evacuation_center_published_at = ? WHERE id = ?",
+                (_utcnow_isoformat(), barangay_id),
+            )
+            connection.commit()
+
+    def barangay_by_psgc_or_name(
+        self, *, psgc_code: str | None, name: str
+    ) -> dict[str, Any] | None:
+        """Match a barangay across databases: prefer the stable PSGC code,
+        fall back to an exact name match when PSGC data isn't loaded."""
+        with self.connection() as connection:
+            row = None
+            if psgc_code:
+                row = connection.execute(
+                    "SELECT * FROM barangays WHERE psgc_code = ?", (psgc_code,)
+                ).fetchone()
+            if row is None:
+                row = connection.execute(
+                    "SELECT * FROM barangays WHERE name = ?", (name,)
+                ).fetchone()
+        return self._barangay_row(row) if row else None
 
     def search_local_locations(
         self,
@@ -556,41 +690,178 @@ class Repository:
                 ORDER BY name COLLATE NOCASE, id
                 """
             ).fetchall()
-        return [
-            {
-                "id": int(row["id"]),
-                "external_id": row["external_id"],
-                "name": row["name"],
-                "latitude": float(row["latitude"]),
-                "longitude": float(row["longitude"]),
-                "barangay": row["barangay"],
-                "designation": row["designation"],
-                "source_name": row["source_name"],
-                "source_date": row["source_date"],
-                "source_metadata": json_value(row["source_metadata_json"], {}),
-                "dataset_version": row["dataset_version"],
-                "is_official": bool(row["is_official"]),
-                "active": bool(row["active"]),
-                "capacity": row["capacity"],
-                "notes": row["notes"],
-                "photo_url": row["photo_url"],
-                "photo_alt": row["photo_alt"],
-                "photo_source": row["photo_source"],
-                "photo_source_url": row["photo_source_url"],
-                "destination_mapped_hazard_screening": {
-                    "status": row["hazard_screening_status"] or "not_screened",
-                    "score": row["hazard_score"],
-                    "category": row["hazard_category"],
-                    "model_version": row["hazard_model_version"],
-                    "screened_at": row["hazard_screened_at"],
-                    "notice": (
-                        "Mapped screening is separate from the center's official designation."
-                    ),
-                },
-                "created_at": row["created_at"],
-            }
-            for row in rows
-        ]
+        return [self._evacuation_center_row(row) for row in rows]
+
+    def evacuation_center(self, center_id: int) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM evacuation_centers WHERE id = ?", (center_id,)
+            ).fetchone()
+        return self._evacuation_center_row(row) if row else None
+
+    def evacuation_center_by_external_id(self, external_id: str) -> dict[str, Any] | None:
+        with self.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM evacuation_centers WHERE external_id = ?", (external_id,)
+            ).fetchone()
+        return self._evacuation_center_row(row) if row else None
+
+    @staticmethod
+    def _evacuation_center_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": int(row["id"]),
+            "external_id": row["external_id"],
+            "name": row["name"],
+            "latitude": float(row["latitude"]),
+            "longitude": float(row["longitude"]),
+            "barangay": row["barangay"],
+            "designation": row["designation"],
+            "source_name": row["source_name"],
+            "source_date": row["source_date"],
+            "source_metadata": json_value(row["source_metadata_json"], {}),
+            "dataset_version": row["dataset_version"],
+            "is_official": bool(row["is_official"]),
+            "active": bool(row["active"]),
+            "capacity": row["capacity"],
+            "notes": row["notes"],
+            "photo_url": row["photo_url"],
+            "photo_alt": row["photo_alt"],
+            "photo_source": row["photo_source"],
+            "photo_source_url": row["photo_source_url"],
+            "destination_mapped_hazard_screening": {
+                "status": row["hazard_screening_status"] or "not_screened",
+                "score": row["hazard_score"],
+                "category": row["hazard_category"],
+                "model_version": row["hazard_model_version"],
+                "screened_at": row["hazard_screened_at"],
+                "notice": (
+                    "Mapped screening is separate from the center's official designation."
+                ),
+            },
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"] if "updated_at" in row.keys() else None,
+            "updated_by": row["updated_by"] if "updated_by" in row.keys() else None,
+            "published_at": row["published_at"] if "published_at" in row.keys() else None,
+        }
+
+    def create_evacuation_center(
+        self,
+        *,
+        external_id: str,
+        name: str,
+        latitude: float,
+        longitude: float,
+        notes: str | None,
+        barangay: str | None,
+        designation: str,
+        source_name: str,
+        actor: str,
+        dataset_version: str = "admin-edit",
+        is_official: bool = False,
+    ) -> int:
+        now = _utcnow_isoformat()
+        with self.connection() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO evacuation_centers (
+                    external_id, name, latitude, longitude, barangay,
+                    designation, source_name, source_date, dataset_version,
+                    is_official, active, notes, created_at, updated_at, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                """,
+                (
+                    external_id,
+                    name,
+                    latitude,
+                    longitude,
+                    barangay,
+                    designation,
+                    source_name,
+                    now,
+                    dataset_version,
+                    1 if is_official else 0,
+                    notes,
+                    now,
+                    now,
+                    actor,
+                ),
+            )
+            connection.commit()
+            return int(cursor.lastrowid)
+
+    def update_evacuation_center(
+        self,
+        center_id: int,
+        *,
+        name: str,
+        latitude: float,
+        longitude: float,
+        notes: str | None,
+        actor: str,
+    ) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                """
+                UPDATE evacuation_centers
+                SET name = ?, latitude = ?, longitude = ?, notes = ?,
+                    updated_at = ?, updated_by = ?
+                WHERE id = ?
+                """,
+                (name, latitude, longitude, notes, _utcnow_isoformat(), actor, center_id),
+            )
+            connection.commit()
+
+    def mark_evacuation_center_published(self, center_id: int) -> None:
+        with self.connection() as connection:
+            connection.execute(
+                "UPDATE evacuation_centers SET published_at = ? WHERE id = ?",
+                (_utcnow_isoformat(), center_id),
+            )
+            connection.commit()
+
+    def upsert_published_evacuation_center(
+        self,
+        *,
+        external_id: str,
+        name: str,
+        latitude: float,
+        longitude: float,
+        notes: str | None,
+        barangay: str | None,
+        designation: str,
+        source_name: str,
+        actor: str,
+        dataset_version: str,
+        is_official: bool,
+    ) -> int:
+        """Insert-or-update by `external_id` in whichever database this
+        repository points at. Used only by the admin Publish action writing
+        into a *different* database file than the one it read the draft
+        from -- ids are not assumed to match across the two files."""
+        existing = self.evacuation_center_by_external_id(external_id)
+        if existing is None:
+            return self.create_evacuation_center(
+                external_id=external_id,
+                name=name,
+                latitude=latitude,
+                longitude=longitude,
+                notes=notes,
+                barangay=barangay,
+                designation=designation,
+                source_name=source_name,
+                actor=actor,
+                dataset_version=dataset_version,
+                is_official=is_official,
+            )
+        self.update_evacuation_center(
+            existing["id"],
+            name=name,
+            latitude=latitude,
+            longitude=longitude,
+            notes=notes,
+            actor=actor,
+        )
+        return existing["id"]
 
     def save_assessment(
         self,

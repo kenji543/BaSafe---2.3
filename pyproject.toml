@@ -23,6 +23,9 @@ gis = [
 routing-prep = [
   "osmnx>=2.0,<3",
 ]
+hazard-events-prep = [
+  "pdfplumber>=0.11,<1",
+]
 
 [tool.setuptools.packages.find]
 include = ["geosafe*"]

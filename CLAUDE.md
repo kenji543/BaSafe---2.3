@@ -156,25 +156,42 @@ intentionally no user/role/permission/session tables in this schema.
 must support one of a fixed list of approved functions (data integration,
 location/barangay selection, hazard visualization, fuzzy assessment,
 explainability, incident/CLUP context, data-quality communication,
-recommendations, report generation, evacuation-route comparison). The public
-product explicitly excludes user accounts, roles/permissions, approval
-workflows, staff dashboards, and a general admin/CMS. When adding a
+recommendations, report generation, evacuation-route comparison, citizen
+damage reporting). The public product explicitly excludes user accounts,
+roles/permissions, approval workflows, staff dashboards, and a general
+admin/CMS. Citizen damage reporting (`/report-damage`, `POST /api/v1/reports`)
+is a deliberate, documented exception: the one public write/upload path. It
+is submit-only, needs no account, stores the reporter's name and phone with
+consent, is visible only to responders in the admin dashboard, and is refused
+on Vercel and on the admin server. Report logic lives in `geosafe/admin.py`
+(`submit_citizen_report` and related methods) and is routed in
+`geosafe/server.py`. When adding a
 public-facing feature, check it against this gate before assuming it belongs
 in `web/`, `geosafe/api.py`, or `geosafe/service.py`.
 
 ### Admin dashboard (local dev only)
 
 `geosafe/admin.py` + `web/admin/` implement a **separate, isolated,
-read-mostly** operational dashboard (dataset/routing/context inventory,
-visitor analytics, evacuation-center photo upload) documented in
+mostly-read** operational dashboard (dataset inventory, evacuation-center
+editing/publishing, hazard-event log, visitor analytics, citizen-report
+triage) documented in
 `docs/admin-development.md`. It runs against its own gitignored database
 (`data/admin-dev.db`), its own port (8001 via `scripts/run_admin_dev.ps1`),
-and never touches the public app on port 8000 or the Vercel deployment. It
-uses server-side session cookies (not the "no accounts" public app) and is
-explicitly scoped to not include dataset activation, deletion, or production
-sync — see the last section of `docs/admin-development.md` for what is
-deliberately unimplemented. Do not conflate this with the public scope gate
-above; it is a developer tool, not part of the approved public interface.
+and never touches the Vercel deployment. It uses server-side session cookies
+(not the "no accounts" public app) and is explicitly scoped to not include
+dataset activation or deletion — see the last section of
+`docs/admin-development.md` for what is deliberately unimplemented and for
+the two exceptions to "never touches the public app on port 8000". Both
+work through `_publish_target_repository()` on `data/geosafe.db`: the
+explicit, validated, audit-logged **Publish** action for evacuation centers,
+and reading or triaging citizen damage reports (status changes only). The
+Publish action never reaches the live
+Vercel deployment, which reads an ephemeral per-cold-start copy of
+`data/geosafe.snapshot.db`, not `data/geosafe.db` directly — going live still
+requires the existing manual `scripts/build_deployment_snapshot.py` +
+`vercel --prod` steps. Do not conflate this dashboard with the public scope
+gate above; it is a developer tool, not part of the approved public
+interface.
 
 ### Vercel deployment
 

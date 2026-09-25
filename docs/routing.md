@@ -15,18 +15,36 @@ independently issued town-proper boundary.
 
 The frozen local OSM walking graph now covers the whole active study area and
 is shared with street/place search; because Basey's road/path network is
-sparse away from the town center, the graph has several disconnected
-components, so "nearest reachable center" is still relative to whichever
-component a selected point snaps onto. A photographed inventory acquired
-directly from the Basey MDRRMO was transcribed into 17 coordinate rows that
-normalize to nine in-scope facilities inside the town-proper area, loaded as
-an operator-declared official source and enabling center search and
+sparse away from the town center, the graph has 9 disconnected weakly
+connected components (`data/routing/osm_snapshot_metadata.json`,
+`disconnected_components`) and only 17.04% of its road segments are named
+(`named_road_segment_count`/`road_segment_count`), so "nearest reachable
+center" is still relative to whichever component a selected point snaps
+onto. Run `scripts/report_routing_connectivity.py` for a current per-
+barangay/per-center breakdown; as of the last run, 4 of the 9 components
+contain at least one official evacuation center, 41 of 51 barangays have a
+route (`maximum_snap_distance_m` is 1000m, chosen because the reachable
+barangays' snap distances cluster tightly under 900m before a real gap to
+increasingly implausible multi-kilometre snaps — see the script's output),
+2 barangays (Baloog, Mabini) sit in a component with no official center at
+all and cannot be fixed by any snap-distance tuning, and the remaining
+unreached barangays are snap-distance-limited in an already-served
+component. A photographed inventory acquired directly from the Basey
+MDRRMO was transcribed into 17 coordinate rows that normalize to nine
+in-scope facilities inside the town-proper area, loaded as an
+operator-declared official source and enabling center search and
 shortest-route generation there. The source photograph and publication date
 are not yet archived, so this provenance limitation remains explicit.
 Facilities matched from the municipality's 2025 MSWDO evacuation-center list
-against OpenStreetMap-sourced coordinates are loaded as `supplied-reference`
-(not `is_official`), so they appear in `/api/v1/evacuation-centers` for
-review but are not yet usable as route destinations.
+against OpenStreetMap-sourced coordinates (`mswdo-cy2025-osm-matched-*`,
+`mswdo-cy2025-user-verified-coords-*`) are loaded as `is_official` and are
+usable route destinations, contrary to an earlier version of this
+paragraph. No commit or script documents when or why they were promoted
+from reference to official — `updated_at` is `NULL` on every MSWDO row, so
+there is no audit trail for this, and their `source_metadata.import_notice`
+field still says "not enabled as an operational route destination," which
+now contradicts their actual `is_official` status. This provenance gap is
+disclosed, not resolved.
 
 The repository does not substitute the municipal boundary, invent centers, or
 download roads during a route request.

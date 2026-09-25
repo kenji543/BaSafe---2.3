@@ -34,7 +34,8 @@
         ["Location permission", "Current-location access is requested only after the user activates the feature. The browser supplies coordinates after permission; Basafe does not continuously track the device."],
         ["Local and offline data", "The service worker stores versioned application files and may retain permitted previously viewed responses. Cached information is not presented as current without its retrieval and expiration status."],
         ["Historical records", "Personally identifiable incident data must not be published. Local CLUP, CDRA, and historical information is displayed only when permitted and appropriately prepared."],
-        ["Optional accounts", "Accounts are not implemented. If added later, they may support personal history and saved locations only; public scoring will remain available without sign-in."]
+        ["Damage reports", "The Report Damage form collects the pinned location, address details, the type and severity of damage, an optional description and photos, and your name and phone number, only after you agree. They are used by Basey MDRRMO responders to find the location and contact you about that report, and are never shown publicly or shared with other residents. Photos are resized and their location and device details are removed before storage. Reports are kept only as long as responders need them for response and recovery, then deleted."],
+        ["Optional accounts", "Accounts are not implemented, and reporting damage does not need one. If accounts are added later, they may support personal history and saved locations only; public scoring will remain available without sign-in."]
       ]
     },
     "/offline": {

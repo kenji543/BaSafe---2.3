@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS barangays (
     is_official INTEGER NOT NULL CHECK (is_official IN (0, 1)),
     is_demo INTEGER NOT NULL CHECK (is_demo IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Admin-managed designation of this barangay's evacuation center (draft,
+    -- local to whichever database this row lives in). NULL until an
+    -- administrator assigns one; see geosafe/admin.py designate/publish.
+    evacuation_center_id INTEGER REFERENCES evacuation_centers(id),
+    evacuation_center_assigned_by TEXT,
+    evacuation_center_assigned_at TEXT,
+    evacuation_center_published_at TEXT,
     CHECK (is_official + is_demo = 1)
 );
 
@@ -317,6 +324,13 @@ CREATE TABLE IF NOT EXISTS evacuation_centers (
     hazard_model_version TEXT,
     hazard_screened_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Admin edit/publish tracking (see geosafe/admin.py). updated_at/by
+    -- reflect the last edit in whichever database this row lives in;
+    -- published_at is set only on a row that has been pushed to
+    -- data/geosafe.db via the admin Publish action.
+    updated_at TEXT,
+    updated_by TEXT,
+    published_at TEXT,
     UNIQUE(external_id, dataset_version)
 );
 
@@ -391,3 +405,64 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 
 CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created
     ON admin_audit_log(created_at DESC);
+
+-- Operator-run script history and a manually curated hazard-event log, both
+-- local-only monitoring data for the isolated admin dashboard. Neither is
+-- written by the deployed public application.
+CREATE TABLE IF NOT EXISTS sync_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target TEXT NOT NULL,
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    finished_at TEXT,
+    status TEXT NOT NULL DEFAULT 'in_progress'
+        CHECK (status IN ('in_progress', 'success', 'failed')),
+    error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_runs_started
+    ON sync_runs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS hazard_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL CHECK (event_type IN ('rain', 'earthquake', 'other')),
+    occurred_at TEXT NOT NULL,
+    severity_value REAL NOT NULL,
+    severity_unit TEXT NOT NULL,
+    source_name TEXT NOT NULL,
+    source_date TEXT,
+    raw_reference TEXT,
+    notes TEXT,
+    is_official INTEGER NOT NULL CHECK (is_official IN (0, 1)),
+    is_demo INTEGER NOT NULL CHECK (is_demo IN (0, 1)),
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (is_official + is_demo = 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_hazard_events_occurred
+    ON hazard_events(occurred_at DESC);
+
+-- Citizen damage reports: personal data (reporter name/phone), visible only
+-- to responders in the admin dashboard, never public, and stripped from the
+-- deployment snapshot by scripts/build_deployment_snapshot.py.
+CREATE TABLE IF NOT EXISTS citizen_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    latitude REAL NOT NULL CHECK (latitude BETWEEN -90 AND 90),
+    longitude REAL NOT NULL CHECK (longitude BETWEEN -180 AND 180),
+    barangay TEXT,
+    street TEXT,
+    sitio TEXT,
+    landmark TEXT,
+    damage_type TEXT NOT NULL CHECK (damage_type IN (
+        'flooding', 'damaged_house_partial', 'damaged_house_total', 'landslide',
+        'road_blocked', 'fallen_tree_or_power_line', 'injured_or_trapped', 'other'
+    )),
+    severity TEXT NOT NULL CHECK (severity IN ('minor', 'moderate', 'severe', 'life_threatening')),
+    people_affected INTEGER CHECK (people_affected IS NULL OR people_affected >= 0),
+    description TEXT,
+    reporter_name TEXT NOT NULL,
+    reporter_phone TEXT NOT NULL,
+    photos_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'acknowledged', 'resolved'))
+);

@@ -67,8 +67,17 @@
       "dest": "/web/info.html"
     },
     {
+      "src": "/report-damage/?",
+      "dest": "/web/report-damage.html"
+    },
+    {
       "src": "/assessment/([A-Za-z0-9_-]{20,128})",
       "dest": "/web/map.html"
+    },
+    {
+      "src": "/admin(?:/.*)?",
+      "status": 404,
+      "dest": "/web/info.html"
     },
     {
       "src": "/(.*\\.(js|css|png|jpg|svg|webmanifest|ico|json|woff|woff2|ttf))",

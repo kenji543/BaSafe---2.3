@@ -21,6 +21,7 @@ PRIVATE_TABLES = (
     "assessment_rule_activations",
     "assessment_results",
     "generated_reports",
+    "citizen_reports",
 )
 
 
@@ -49,7 +50,15 @@ def build_snapshot(source: Path, destination: Path, *, force: bool = False) -> s
     try:
         source_connection.backup(destination_connection)
         destination_connection.execute("PRAGMA foreign_keys = ON")
-        destination_connection.execute("DELETE FROM assessments")
+        existing = {
+            name
+            for (name,) in destination_connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        private_tables = [table for table in PRIVATE_TABLES if table in existing]
+        for table in private_tables:
+            destination_connection.execute(f"DELETE FROM {table}")
         destination_connection.execute(
             "DELETE FROM sqlite_sequence WHERE name IN ("
             + ",".join("?" for _ in PRIVATE_TABLES)
@@ -59,7 +68,7 @@ def build_snapshot(source: Path, destination: Path, *, force: bool = False) -> s
         destination_connection.commit()
 
         remaining = {
-            table: row_count(destination_connection, table) for table in PRIVATE_TABLES
+            table: row_count(destination_connection, table) for table in private_tables
         }
         if any(remaining.values()):
             raise RuntimeError(f"Private rows remain in deployment snapshot: {remaining}")

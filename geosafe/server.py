@@ -46,6 +46,7 @@ PUBLIC_PAGE_PATHS = {
     "/about",
     "/privacy",
     "/offline",
+    "/report-damage",
 }
 
 
@@ -93,6 +94,11 @@ class GeoSafeServer(ThreadingHTTPServer):
         )
         self.assessment_rate_limit = _environment_positive_int(
             "GEOSAFE_ASSESSMENTS_PER_MINUTE", 12
+        )
+        # Mobile carriers share one IP across many users (CGNAT), so keep this
+        # generous enough for a crowded evacuation site.
+        self.report_rate_limit = _environment_positive_int(
+            "GEOSAFE_REPORTS_PER_MINUTE", 10
         )
         self.admin_enabled = _environment_flag(
             "GEOSAFE_ADMIN_ENABLED", default=False
@@ -163,6 +169,8 @@ class GeoSafeServer(ThreadingHTTPServer):
             limit = self.assessment_rate_limit
         elif bucket == "admin_login":
             limit = self.admin_login_rate_limit
+        elif bucket == "report":
+            limit = self.report_rate_limit
         else:
             limit = self.api_rate_limit
         now = time.monotonic()
@@ -417,11 +425,11 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
     @staticmethod
     def _multipart_fields(
         content_type: str, body: bytes
-    ) -> tuple[bytes, dict[str, str]]:
+    ) -> tuple[list[bytes], dict[str, str]]:
         if not content_type.casefold().startswith("multipart/form-data"):
             raise AdminOperationError(
                 "multipart_required",
-                "Upload the photograph using multipart form data.",
+                "Send the form using multipart form data.",
             )
         message = BytesParser(policy=policy.default).parsebytes(
             b"Content-Type: "
@@ -431,9 +439,9 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
         )
         if not message.is_multipart():
             raise AdminOperationError(
-                "invalid_multipart", "The upload form could not be read."
+                "invalid_multipart", "The form could not be read."
             )
-        photo = b""
+        photos: list[bytes] = []
         fields: dict[str, str] = {}
         for part in message.iter_parts():
             name = part.get_param("name", header="content-disposition")
@@ -441,15 +449,16 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                 continue
             payload = part.get_payload(decode=True) or b""
             if name == "photo":
-                photo = payload
+                if payload:
+                    photos.append(payload)
             else:
                 try:
                     fields[name] = payload.decode("utf-8")[:1000]
                 except UnicodeDecodeError as exc:
                     raise AdminOperationError(
-                        "invalid_form_text", "The upload details must use UTF-8 text."
+                        "invalid_form_text", "The form details must use UTF-8 text."
                     ) from exc
-        return photo, fields
+        return photos, fields
 
     @staticmethod
     def _admin_error_response(error: AdminOperationError) -> Response:
@@ -457,6 +466,20 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             {"error": {"code": error.code, "message": str(error)}},
             status=error.status,
         )
+
+    @staticmethod
+    def _json_body(body: bytes) -> dict:
+        if not body:
+            raise AdminOperationError("body_required", "A JSON request body is required.")
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise AdminOperationError(
+                "invalid_json", "Request body contains invalid JSON."
+            ) from exc
+        if not isinstance(payload, dict):
+            raise AdminOperationError("invalid_json", "Request body must be a JSON object.")
+        return payload
 
     def _api_response(self, method: str) -> Response:
         split = urlsplit(self.path)
@@ -491,11 +514,44 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             except ValueError:
                 days = 7
             return Response.json(self.server.admin_dashboard.analytics(days))
+        if normalized_path == "/api/v1/admin/hazard-events":
+            if method != "GET":
+                return Response.json(
+                    {"error": {"code": "method_not_allowed", "message": "The hazard-event log is read-only here."}},
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            return Response.json(self.server.admin_dashboard.hazard_events())
+        if normalized_path == "/api/v1/admin/evacuation-centers":
+            if method == "GET":
+                return Response.json(self.server.admin_dashboard.evacuation_centers_admin_list())
+        if normalized_path == "/api/v1/admin/barangays":
+            if method != "GET":
+                return Response.json(
+                    {"error": {"code": "method_not_allowed", "message": "Use GET to list barangays."}},
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            return Response.json(self.server.admin_dashboard.barangays_admin_list())
+        if normalized_path == "/api/v1/admin/reports":
+            if method != "GET":
+                return Response.json(
+                    {"error": {"code": "method_not_allowed", "message": "Use GET to list damage reports."}},
+                    status=405,
+                    headers={"Allow": "GET"},
+                )
+            try:
+                return Response.json(self.server.admin_dashboard.citizen_reports())
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
         photo_file_match = re.fullmatch(
             r"/api/v1/admin/evacuation-centers/(\d+)/photo/([^/]+)",
             normalized_path,
         )
-        if photo_file_match:
+        report_photo_match = re.fullmatch(
+            r"/api/v1/admin/reports/(\d+)/photos/([^/]+)", normalized_path
+        )
+        if photo_file_match or report_photo_match:
             if method != "GET":
                 return Response.json(
                     {"error": {"code": "method_not_allowed", "message": "The photograph resource is read-only."}},
@@ -503,9 +559,14 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                     headers={"Allow": "GET"},
                 )
             try:
-                content, mime_type = self.server.admin_dashboard.evacuation_center_photo(
-                    int(photo_file_match.group(1)), photo_file_match.group(2)
-                )
+                if photo_file_match:
+                    content, mime_type = self.server.admin_dashboard.evacuation_center_photo(
+                        int(photo_file_match.group(1)), photo_file_match.group(2)
+                    )
+                else:
+                    content, mime_type = self.server.admin_dashboard.citizen_report_photo(
+                        int(report_photo_match.group(1)), report_photo_match.group(2)
+                    )
             except AdminOperationError as error:
                 return self._admin_error_response(error)
             return Response(
@@ -527,17 +588,82 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                 status=405,
                 headers={"Allow": "POST"},
             )
-        bucket = (
-            "assessment"
-            if method == "POST"
-            and split.path.rstrip("/") in {
-                "/api/assessments",
-                "/api/v1/assessments",
-                "/api/route",
-                "/api/v1/route",
-            }
-            else "api"
+        create_center_match = normalized_path == "/api/v1/admin/evacuation-centers" and method == "POST"
+        edit_center_match = re.fullmatch(
+            r"/api/v1/admin/evacuation-centers/(\d+)", normalized_path
         )
+        if edit_center_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to edit an evacuation center."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        publish_center_match = re.fullmatch(
+            r"/api/v1/admin/evacuation-centers/(\d+)/publish", normalized_path
+        )
+        if publish_center_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to publish an evacuation center."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        designate_match = re.fullmatch(
+            r"/api/v1/admin/barangays/(\d+)/designate", normalized_path
+        )
+        if designate_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to designate a barangay's center."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        publish_designation_match = re.fullmatch(
+            r"/api/v1/admin/barangays/(\d+)/publish", normalized_path
+        )
+        if publish_designation_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to publish a barangay's designation."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        report_status_match = re.fullmatch(
+            r"/api/v1/admin/reports/(\d+)/status", normalized_path
+        )
+        if report_status_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to change a report's status."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        report_match = normalized_path == "/api/v1/reports"
+        if report_match and self.server.admin_enabled:
+            # The admin server runs on its own database, which the triage
+            # page never reads -- a report accepted here would be lost.
+            return Response.json(
+                {
+                    "error": {
+                        "code": "report_intake_unavailable",
+                        "message": "Damage reports can't be received here. Use the public app.",
+                    }
+                },
+                status=503,
+            )
+        if report_match and method != "POST":
+            return Response.json(
+                {"error": {"code": "method_not_allowed", "message": "Use POST to send a damage report."}},
+                status=405,
+                headers={"Allow": "POST"},
+            )
+        if report_match:
+            bucket = "report"
+        elif method == "POST" and split.path.rstrip("/") in {
+            "/api/assessments",
+            "/api/v1/assessments",
+            "/api/route",
+            "/api/v1/route",
+        }:
+            bucket = "assessment"
+        else:
+            bucket = "api"
         allowed, limit, remaining, retry_after = self.server.check_rate_limit(
             self.client_address[0], bucket
         )
@@ -581,17 +707,16 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                     },
                     status=400,
                 )
-            request_limit = (
-                ADMIN_MAX_REQUEST_BYTES if photo_upload_match else MAX_REQUEST_BYTES
-            )
+            is_upload = bool(photo_upload_match or report_match)
+            request_limit = ADMIN_MAX_REQUEST_BYTES if is_upload else MAX_REQUEST_BYTES
             if content_length < 0 or content_length > request_limit:
                 return Response.json(
                     {
                         "error": {
                             "code": "request_too_large",
                             "message": (
-                                "Photo upload exceeds the 6 MiB request limit."
-                                if photo_upload_match
+                                "The upload exceeds the 6 MiB request limit."
+                                if is_upload
                                 else "Request body exceeds the 1 MiB limit."
                             ),
                         }
@@ -599,20 +724,90 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
                     status=413,
                 )
             body = self.rfile.read(content_length)
+        if report_match:
+            try:
+                photos, fields = self._multipart_fields(
+                    self.headers.get("Content-Type", ""), body
+                )
+                return Response.json(
+                    self.server.admin_dashboard.submit_citizen_report(fields, photos),
+                    status=201,
+                )
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
         if photo_upload_match:
             try:
-                photo, fields = self._multipart_fields(
+                photos, fields = self._multipart_fields(
                     self.headers.get("Content-Type", ""), body
                 )
                 payload = self.server.admin_dashboard.upload_evacuation_center_photo(
                     int(photo_upload_match.group(1)),
-                    photo,
+                    photos[-1] if photos else b"",
                     alt_text=fields.get("alt_text"),
                     source=fields.get("source"),
                     source_url=fields.get("source_url"),
                     actor=self.server.admin_username,
                 )
                 return Response.json(payload, status=201)
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
+        if create_center_match or edit_center_match or publish_center_match or designate_match or publish_designation_match or report_status_match:
+            try:
+                payload = self._json_body(body) if not (publish_center_match or publish_designation_match) else {}
+            except AdminOperationError as error:
+                return self._admin_error_response(error)
+            actor = self.server.admin_username
+            try:
+                if create_center_match:
+                    result = self.server.admin_dashboard.create_evacuation_center(
+                        name=payload.get("name"),
+                        latitude=payload.get("latitude"),
+                        longitude=payload.get("longitude"),
+                        notes=payload.get("notes"),
+                        actor=actor,
+                    )
+                    return Response.json(result, status=201)
+                if edit_center_match:
+                    result = self.server.admin_dashboard.update_evacuation_center(
+                        int(edit_center_match.group(1)),
+                        name=payload.get("name"),
+                        latitude=payload.get("latitude"),
+                        longitude=payload.get("longitude"),
+                        notes=payload.get("notes"),
+                        actor=actor,
+                    )
+                    return Response.json(result)
+                if publish_center_match:
+                    result = self.server.admin_dashboard.publish_evacuation_center(
+                        int(publish_center_match.group(1)), actor=actor
+                    )
+                    return Response.json(result)
+                if designate_match:
+                    center_id = payload.get("evacuation_center_id")
+                    if not isinstance(center_id, int):
+                        return self._admin_error_response(
+                            AdminOperationError(
+                                "evacuation_center_id_required",
+                                "Provide the evacuation_center_id to assign.",
+                            )
+                        )
+                    result = self.server.admin_dashboard.designate_barangay_center(
+                        int(designate_match.group(1)), center_id, actor=actor
+                    )
+                    return Response.json({"items": result})
+                if publish_designation_match:
+                    result = self.server.admin_dashboard.publish_barangay_designation(
+                        int(publish_designation_match.group(1)), actor=actor
+                    )
+                    return Response.json({"items": result})
+                if report_status_match:
+                    return Response.json(
+                        self.server.admin_dashboard.set_citizen_report_status(
+                            int(report_status_match.group(1)),
+                            payload.get("status"),
+                            actor=actor,
+                        )
+                    )
             except AdminOperationError as error:
                 return self._admin_error_response(error)
         return self.server.api.dispatch(
@@ -637,12 +832,12 @@ class GeoSafeRequestHandler(BaseHTTPRequestHandler):
             "/admin/datasets/": "admin/datasets.html",
             "/admin/evacuation-centers": "admin/evacuation-centers.html",
             "/admin/evacuation-centers/": "admin/evacuation-centers.html",
-            "/admin/routing": "admin/routing.html",
-            "/admin/routing/": "admin/routing.html",
-            "/admin/context": "admin/context.html",
-            "/admin/context/": "admin/context.html",
-            "/admin/activity": "admin/activity.html",
-            "/admin/activity/": "admin/activity.html",
+            "/admin/hazard-events": "admin/hazard-events.html",
+            "/admin/hazard-events/": "admin/hazard-events.html",
+            "/admin/reports": "admin/reports.html",
+            "/admin/reports/": "admin/reports.html",
+            "/report-damage": "report-damage.html",
+            "/report-damage/": "report-damage.html",
             "/map": "map.html",
             "/map/": "map.html",
             "/methodology": "methodology.html",

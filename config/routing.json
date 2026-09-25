@@ -1,11 +1,11 @@
 {
-  "config_version": "1.0.0",
+  "config_version": "1.0.1",
   "algorithm": "astar",
   "network_type": "walk",
   "risk_factor": 2.0,
   "walking_speed_kph": 4.5,
   "elevated_hazard_threshold": 0.6,
-  "maximum_snap_distance_m": 500.0,
+  "maximum_snap_distance_m": 1000.0,
   "minimum_hazard_completeness": 1.0,
   "missing_hazard_policy": "reject_edge",
   "study_area_version": "basey-municipal-boundary-v1",

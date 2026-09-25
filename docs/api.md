@@ -51,6 +51,42 @@ algorithm remains internal research code and is not a public route mode.
 See [routing.md](routing.md) for the algorithm, preprocessing, errors, and data
 dependencies.
 
+## Citizen damage reports
+
+### `POST /api/v1/reports`
+
+This is the public product's only write endpoint for user-supplied content. It
+is submit-only: it returns a reference number and never lists or reads back
+reports. Responders review reports in the local admin dashboard
+(`/admin/reports`).
+
+The body must be `multipart/form-data`, up to 6 MiB in total. Text fields are
+truncated at 1000 characters by the parser.
+
+| Field | Required | Rule |
+| --- | --- | --- |
+| `latitude`, `longitude` | yes | WGS 84; must fall inside Basey. The barangay is resolved server-side. |
+| `damage_type` | yes | `flooding`, `damaged_house_partial`, `damaged_house_total`, `landslide`, `road_blocked`, `fallen_tree_or_power_line`, `injured_or_trapped`, or `other` |
+| `severity` | yes | `minor`, `moderate`, `severe`, or `life_threatening` |
+| `reporter_name` | yes | 1–100 characters |
+| `reporter_phone` | yes | 7–15 digits with an optional leading `+`; spaces, dashes, and parentheses are ignored |
+| `consent` | yes | must be `yes` |
+| `street`, `sitio`, `landmark` | no | up to 200 characters each |
+| `description` | no | up to 1000 characters |
+| `people_affected` | no | whole number, 0–100000 |
+| `photo` | no | repeatable, at most 3 parts; each JPEG, PNG, or WebP up to 5 MB. Each photo is re-encoded as a JPEG no larger than 1600 px, which removes EXIF location and device data. |
+
+`201` returns `{"id": 12, "barangay": "Loyo (Pob.)", "received_at": "…+00:00"}`.
+
+| Status | `error.code` | Meaning |
+| --- | --- | --- |
+| 400 | e.g. `consent_required`, `invalid_phone`, `invalid_severity`, `invalid_photo`, `too_many_photos` | A field failed validation |
+| 405 | `method_not_allowed` | Anything other than POST. The page's GET availability check relies on this response. |
+| 413 | `request_too_large` / `photo_too_large` | The body is over 6 MiB, or a photo is over 5 MB |
+| 422 | `outside_basey` | The pin is outside the Basey boundary |
+| 429 | `rate_limit_exceeded` | More than `GEOSAFE_REPORTS_PER_MINUTE` (default 10) reports from one IP in a minute |
+| 503 | `report_intake_unavailable` | Sent to the admin server (port 8001), whose database the triage page doesn't read, or to the Vercel deployment, which has no persistent storage |
+
 ## 2. Common fields and errors
 
 ### 2.1 Provenance and quality

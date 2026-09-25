@@ -20,6 +20,7 @@ Every feature must directly support at least one of the following:
 - planning-oriented recommendations; or
 - report generation.
 - pedestrian evacuation-route comparison, within the loaded routing study area, using frozen local data.
+- citizen damage reporting: submit-only intake of resident damage reports (pinned location, address details, damage type and severity, up to three photos, and the reporter's name and phone given with consent) for Basey MDRRMO responders. Reports are visible only in the local admin dashboard, never to other users, and need no account. This function was added deliberately in response to client feedback; it is the product's only public write path for user-supplied content and only browser upload.
 
 Anything that fails this scope gate is not part of the application.
 
@@ -37,6 +38,8 @@ public product has one unified interface and does not implement:
 - browser-based dataset or fuzzy-model management reachable from the public product;
 - a general-purpose content-management system; or
 - separate interfaces for municipal offices.
+
+The Report Damage form (Section 4) does not conflict with these exclusions: it is submit-only, needs no account, and never publishes, moderates, or displays submissions to other users, so it is neither a publication workflow nor a content-management system.
 
 Authentication is not a core requirement of the public product and the initial prototype is unauthenticated there. If a later deployment requires basic perimeter protection for the public product, a single shared password may be read from an environment variable. That optional protection is not implemented in the initial prototype and must not introduce registration, multiple accounts, roles, permissions, user tables, or management pages in the public product.
 
@@ -60,7 +63,8 @@ The target implementation intentionally uses a small number of components:
 | Local routing service | Load a frozen walking graph for the active routing study area, compare shortest and mapped-hazard-aware A* routes to every reachable designated center, and return stateless GeoJSON plus reproducibility metadata |
 | Local OSM search service | Rank normalized street/POI records stored from the same frozen walking-network synchronization and return inspectable GeoJSON without runtime geocoding |
 | PDF report renderer | Produce a repeatable assessment document containing the result, explanation, sources, quality notices, limitations, and disclaimer |
-| Local admin dashboard *(isolated, not part of the public product; see 3.1)* | Read-mostly operational visibility for a local developer: dataset/routing/context inventory, visitor analytics, evacuation-center photo upload |
+| Citizen damage report intake | Validate and store resident damage reports for responders only. Photos are re-encoded to strip location and device metadata. The Vercel deployment refuses reports until persistent storage exists. |
+| Local admin dashboard *(isolated, not part of the public product; see 3.1)* | Mostly-read operational visibility for a local developer: dataset inventory, evacuation-center editing and publishing, hazard-event log, visitor analytics, and citizen-report triage |
 
 The browser is a client of the JSON API. It does not call ULAP directly, contain authoritative hazard values, expose an ArcGIS token, or independently calculate the final score. The API validates live source metadata, resolves the selected point, obtains available source records, applies the exact configured model only when all required inputs are valid, and persists enough detail to reproduce the explanation.
 
@@ -82,8 +86,11 @@ Isolation boundaries:
   `scripts/run_admin_dev.ps1`.
 - Reads and writes its own private, gitignored SQLite database
   (`data/admin-dev.db`), copied once from the bundled snapshot. It never
-  connects to the public local application on port 8000, to the public
-  Vercel deployment, or to `data/geosafe.db`.
+  connects to the public Vercel deployment. It opens `data/geosafe.db`, the
+  local public app's database, for exactly two deliberate purposes: the
+  explicit evacuation-center **Publish** action, and reading citizen damage
+  reports and changing their triage status. Both are described in
+  [admin-development.md](admin-development.md).
 - Uses server-side session cookies (random session id, HTTP-only, SameSite,
   eight-hour inactivity expiry, invalidated on restart, rate-limited sign-in)
   gated behind `/admin/login`. This authentication model is specific to the
@@ -96,10 +103,9 @@ Pages, each a dedicated authenticated route: `/admin` (overview/action
 queue), `/admin/analytics` (anonymous visitor counts and a seven-day
 activity graph, keyed by a random first-party browser identifier — no
 accounts, no raw IP persistence), `/admin/datasets` (hazard dataset
-inventory), `/admin/evacuation-centers` (facility inventory and photo
-upload), `/admin/routing` (routing dependency and study-area status),
-`/admin/context` (historical incident, CLUP, barangay, and boundary counts),
-and `/admin/activity` (recent scoring activity).
+inventory), `/admin/evacuation-centers` (one card per barangay: edit,
+assign, photograph, and publish centers), `/admin/hazard-events` (hazard-event
+calendar and trend), and `/admin/reports` (citizen damage report triage).
 
 The dashboard deliberately does not implement dataset activation, record
 deletion, or production synchronization; those remain command-line
@@ -125,8 +131,9 @@ The static application exposes only these project pages or panels:
 3. **Assessment Report Preview**: the exact substantive content intended for the PDF and a report-generation action.
 4. **Methodology and Limitations**: model version, variables, membership functions, rules, source catalogue, limitations, validation status, and disclaimer.
 5. **Assessment History panel**: private-token references retained in the current browser for review and report download. The backend does not publish a shared history listing.
+6. **Report Damage** (`/report-damage`): a submit-only form with a map pin (checked against the Basey boundary, with the barangay resolved), street, sitio/purok and landmark, damage type and severity, an optional count of people affected, a description, up to three photos resized in the browser, the reporter's name and phone, a consent checkbox, and a prominent notice that it is not an emergency hotline.
 
-The implementation uses four HTML documents: `index.html` is the public landing page, `map.html` contains the map/results/report workflow, `methodology.html` documents the model, and `info.html` renders the source, limitations, about, privacy, and offline routes. No page is varied according to user type.
+The implementation uses five HTML documents: `index.html` is the public landing page, `map.html` contains the map/results/report workflow, `methodology.html` documents the model, `info.html` renders the source, limitations, about, privacy, and offline routes, and `report-damage.html` is the damage-report form. No page is varied according to user type.
 
 ## 5. Primary workflow
 
@@ -220,6 +227,7 @@ Only tables directly required by approved functions are allowed:
 | `evacuation_centers` | Researcher/LGU-supplied designated centers, coordinates, designation, provenance, version, and optional capacity |
 | `visitor_sessions`, `visitor_events` | Aggregate, non-identifying visitor counts (random first-party id, path, timestamps) read only by the isolated admin dashboard's analytics page (Section 3.1); not read by any public-product API |
 | `admin_audit_log` | Local admin-dashboard action log (actor, action, entity, timestamp); not read by any public-product API |
+| `citizen_reports` | Resident damage reports: pinned location, resolved barangay, address details, damage type/severity, people affected, description, stored photo filenames, reporter name and phone, and triage status. Written only by `POST /api/v1/reports`, read only by the admin dashboard, never returned by a public API, and removed from the deployment snapshot. |
 
 Foreign keys are enabled. Imports and assessments use transactions. Provenance and model snapshots prevent a later data or configuration update from silently changing an existing assessment explanation.
 
@@ -248,15 +256,17 @@ The public API is versioned under `/api/v1` and limited to:
 - live-source status: ULAP service summaries and validated metadata;
 - map and spatial data: Basey boundary, barangays, hazard layers/features, search, identify, and hazards at a point;
 - assessment: create/list/read, explanation, and PDF report;
-- supporting information: incidents, nearby incidents, CLUP references/by-location, methodology, and data sources.
+- supporting information: incidents, nearby incidents, CLUP references/by-location, methodology, and data sources;
+- citizen damage reports: a single submit-only `POST /api/v1/reports` (multipart, up to three photos). It returns only a reference number and never lists or reads back reports.
 
 Detailed application contracts are in [api.md](api.md). Live-source architecture,
 field mappings, failures, and gaps are documented in
 [ulap-integration.md](ulap-integration.md),
 [ulap-field-mappings.md](ulap-field-mappings.md), and
-[known-data-gaps.md](known-data-gaps.md). Within this public boundary there
-are no authentication, account, role, permission, staff, administration,
-approval, audit, upload, or model-editor API groups.
+[known-data-gaps.md](known-data-gaps.md). Apart from that single report
+endpoint, there are no authentication, account, role, permission, staff,
+administration, approval, audit, upload, or model-editor API groups within
+this public boundary.
 
 ## 9. Fuzzy engine boundary
 
@@ -295,7 +305,8 @@ Report preview and PDF content are contract-tested so material warnings cannot d
 ## 11. Security, privacy, and operational constraints
 
 - The prototype binds according to deployment configuration and should be placed behind HTTPS when exposed beyond a trusted network.
-- No identity data is required. Assessment history stores a point selected by the user, so deployments must define an appropriate retention policy.
+- No identity data is required to use the product. Assessment history stores a point selected by the user, so deployments must define an appropriate retention policy.
+- The Report Damage form is the one place personal data is collected: the reporter's name and phone, given voluntarily with explicit consent under the Philippine Data Privacy Act. It is used only by responders, never made public, and excluded from the deployment snapshot. Uploaded photos are decoded and re-encoded server-side, which removes EXIF location and device data, and stored under server-generated names outside the web root. Report intake has its own per-IP rate limit, is refused by the admin server and the Vercel deployment, and needs a retention period set by Basey MDRRMO.
 - Inputs are validated and SQL statements are parameterized.
 - Outbound ArcGIS calls use HTTPS and an explicit two-host allowlist; redirects are revalidated.
 - Optional ArcGIS credentials are read from `ULAP_TOKEN` on the server and removed from logs, cache keys, response URLs, and reports.
@@ -307,7 +318,8 @@ Report preview and PDF content are contract-tested so material warnings cannot d
 - The local admin dashboard (Section 3.1) is a separate trust boundary: it is
   the one part of the codebase with accounts and sessions, and that
   authentication model applies only there. It must remain unreachable from
-  the public origin/deployment and must not read or write `data/geosafe.db`.
+  the public origin/deployment. It touches `data/geosafe.db` only through
+  the two deliberate paths listed in Section 3.1.
 
 ## 12. Architecture tests and scope control
 
@@ -315,7 +327,8 @@ The current standard-library `unittest` suite covers:
 
 - schema initialization produces exactly the approved application tables;
 - endpoint scope checks reject identity and administrative API families from the public product;
-- no approved public page, public table, or tested public API path introduces roles, users, permissions, admin portals, approvals, or browser uploads (`tests/test_scope.py`);
+- no approved public page, public table, or tested public API path introduces roles, users, permissions, admin portals, approvals, or browser uploads other than the single submit-only Report Damage form (`tests/test_scope.py`);
+- report intake validation, photo metadata stripping, the report rate limit, and refusal on the admin server and Vercel (`tests/test_http_server.py`); responder-only triage (`tests/test_admin_dashboard.py`); and report removal from the deployment snapshot (`tests/test_deployment_snapshot.py`);
 - the local admin dashboard's own isolation: its routes, session cookies, and rate limiting behave as documented, and it stays off the public API/page allowlists above (`tests/test_admin_dashboard.py`);
 - point containment and barangay identification;
 - the presence of all three selection controls and approved frontend API references;

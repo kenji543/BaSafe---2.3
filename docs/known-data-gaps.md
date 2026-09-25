@@ -9,25 +9,55 @@ scenario maps and the fuzzy model has not been validated by domain experts.
 
 The gaps below are data and validation dependencies, not reasons to add an
 administrative portal, accounts, roles, approval screens, or browser upload
-workflows.
+workflows. The one deliberate exception, added from client feedback, is the
+submit-only citizen damage report form (`/report-damage`). Its reports go
+only to responders, are never public, and do not feed any hazard dataset or
+the fuzzy model: they are responder information, not source data.
+
+### Citizen damage report gaps
+
+- **Not available on the live site.** Vercel has no persistent storage, so
+  it refuses reports. Accepting them there needs a persistent database,
+  private photo storage, and a rate limit that isn't held in process memory.
+- **MDRRMO hotline number.** The form's emergency notice gives 911 and "the
+  Basey MDRRMO" without a number; the client must supply the official one.
+- **Retention period.** Basey MDRRMO must set how long reports (with names
+  and phone numbers) are kept. Until then, purge them manually as described
+  in [admin-development.md](admin-development.md).
+- **No offline sending.** A report sent without signal fails, and the form
+  keeps its answers for a retry, but there is no background queue.
 
 ## 2. Blocking gaps
 
-### Town-proper evacuation routing data
+### Municipality-wide evacuation routing data
 
-The routing study area is now derived from the loaded official PSA polygons for
-Mercado, Palaypay, Baybay, Sulod, Loyo, Buscada, and Lawa-an. The grouping was
-defined by the project researcher, so it remains explicitly non-official even
-though its component polygons are official source records. The frozen
-pedestrian graph is present. A photographed inventory acquired directly from
-the Basey MDRRMO was transcribed into 17 coordinate rows that normalize to nine
-in-scope facilities; all nine fall within the study area and the connected road
-graph. The operator-declared MDRRMO extract is enabled for route destinations,
-so standard evacuation-route generation is available. The original photograph and its
-publication date are not yet archived, capacities and activation conditions are
-unknown, and the researcher intentionally excluded unrelated facilities outside
-the study scope. The public workflow uses the nearest reachable designated center
-and does not expose the experimental hazard-aware comparison. See
+The active routing study area is the full official Basey municipal PSA
+polygon (`routing_study_areas` version `basey-municipal-boundary-v1`), not
+the seven-barangay Mercado/Palaypay/Baybay/Sulod/Loyo/Buscada/Lawa-an
+composite this section used to describe as active — that composite remains
+available only as a legacy, explicitly non-official alternative, reactivatable
+via `scripts/build_town_proper_boundary.py` +
+`scripts/import_routing_data.py study-area --replace`. The frozen pedestrian
+graph covers this wider area but is genuinely sparse away from the town
+center: 9 disconnected components, 17.04% named road segments
+(`data/routing/osm_snapshot_metadata.json`). Run
+`scripts/report_routing_connectivity.py` for a current count; as of the last
+run, 41 of 51 barangays have a working route (`maximum_snap_distance_m` is
+1000m, raised from 500m after that script showed 16 barangays' representative
+points clustered under 900m from the network with no working route at the old
+cutoff), 2 barangays (Baloog, Mabini) sit in a graph component with no
+official evacuation center at all and cannot be fixed by snap-distance
+tuning, and the rest remain snap-distance-limited. Both the original 9-facility
+MDRRMO town-proper extract and two later MSWDO-derived imports
+(`mswdo-cy2025-osm-matched-*`, `mswdo-cy2025-user-verified-coords-*`,
+45 rows across 42 barangays) are loaded `is_official` and usable as route
+destinations; the MSWDO imports have no audit trail for when/why they were
+promoted to official (`updated_at` is `NULL` on every such row), and their
+stored `import_notice` metadata still incorrectly says they are "not enabled
+as an operational route destination" — a stale field, not current behavior.
+Capacities and activation conditions remain unknown for all sources. The
+public workflow uses the nearest reachable designated center and does not
+expose the experimental hazard-aware comparison. See
 [routing.md](routing.md) for the exact provenance and preprocessing contract.
 
 | Gap | Current evidence | Required resolution | Effect until resolved |
@@ -193,7 +223,8 @@ test result.
 
 The following are intentionally excluded rather than missing:
 
-- users, registration, multiple accounts, roles, and permissions;
+- users, registration, multiple accounts, roles, and permissions (the damage
+  report form collects a name and phone per report and needs no account);
 - administrator/staff/office-specific interfaces;
 - account or dataset approval workflows;
 - browser-based data/model management;

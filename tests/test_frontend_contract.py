@@ -45,8 +45,19 @@ class FrontendContractTests(unittest.TestCase):
         html_pages = {path.name for path in WEB_ROOT.glob("*.html")}
         self.assertEqual(
             html_pages,
-            {"index.html", "map.html", "methodology.html", "info.html"},
+            {"index.html", "map.html", "methodology.html", "info.html", "report-damage.html"},
         )
+
+    def test_damage_report_page_is_submit_only_with_consent(self) -> None:
+        page = (WEB_ROOT / "report-damage.html").read_text(encoding="utf-8")
+        script = (WEB_ROOT / "report-damage.js").read_text(encoding="utf-8")
+        self.assertIn('name="consent" type="checkbox" value="yes" required', page)
+        self.assertIn("not an emergency hotline", page)
+        self.assertIn("/location/identify", script)
+        self.assertIn('"/api/v1/reports"', script)
+        self.assertNotIn("/admin", script)
+        for page_name in ("map.html", "index.html"):
+            self.assertIn('href="/report-damage"', (WEB_ROOT / page_name).read_text(encoding="utf-8"))
 
     def test_main_page_contains_required_unified_workflow_controls(self) -> None:
         parser = IdCollector()
@@ -343,6 +354,7 @@ class FrontendContractTests(unittest.TestCase):
                 "info.js",
                 "pwa.js",
                 "service-worker.js",
+                "report-damage.js",
             ):
                 completed = subprocess.run(
                     ["node", "--check", str(WEB_ROOT / filename)],
