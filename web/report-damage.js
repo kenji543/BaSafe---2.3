@@ -5,12 +5,13 @@
   const BASEY_FALLBACK_BOUNDS = [[11.2540, 124.9764], [11.5641, 125.3092]];
   const MAX_PHOTOS = 3;
   const MAX_EDGE = 1600;
+  const STEPS = ["location", "details", "photos", "contact"];
   const byId = (id) => document.getElementById(id);
   const form = byId("report-form");
   const locationStatus = byId("location-status");
   const photoStatus = byId("photo-status");
   const formStatus = byId("form-status");
-  const photos = [];
+  const photos = [null, null, null];
   let pin = null;
   let marker = null;
   let lookup = 0;
@@ -19,13 +20,6 @@
     element.textContent = message;
     element.dataset.kind = kind;
   }
-
-  const menuButton = document.querySelector(".menu-toggle");
-  menuButton?.addEventListener("click", () => {
-    const open = menuButton.getAttribute("aria-expanded") !== "true";
-    menuButton.setAttribute("aria-expanded", String(open));
-    document.querySelector(".site-nav")?.classList.toggle("is-open", open);
-  });
 
   fetch("/api/v1/reports", { headers: { Accept: "application/json" } })
     .then((response) => {
@@ -36,6 +30,28 @@
     })
     .catch(() => {});
 
+  // ---------------- Step navigation ----------------
+  function showStep(id) {
+    document.querySelectorAll(".rd-step[data-step]").forEach((section) => {
+      section.hidden = section.dataset.step !== id;
+    });
+    window.scrollTo({ top: 0, behavior: "auto" });
+    const heading = document.querySelector(`.rd-step[data-step="${id}"] h1`);
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({ preventScroll: true });
+  }
+  document.querySelectorAll("[data-next]").forEach((button) => {
+    button.addEventListener("click", () => showStep(button.dataset.next));
+  });
+  document.querySelectorAll("[data-back]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const current = document.querySelector(".rd-step[data-step]:not([hidden])")?.dataset.step;
+      const index = STEPS.indexOf(current);
+      if (index > 0) showStep(STEPS[index - 1]);
+    });
+  });
+
+  // ---------------- Map / location ----------------
   const map = L.map("report-map", {
     maxBounds: L.latLngBounds(BASEY_FALLBACK_BOUNDS).pad(0.3),
     maxBoundsViscosity: 0.8
@@ -45,6 +61,7 @@
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(map);
   const pinIcon = L.divIcon({ className: "", html: '<span class="report-pin" aria-hidden="true"></span>', iconSize: [30, 38], iconAnchor: [15, 30] });
+  const locationContinue = byId("step-location-continue");
 
   async function placePin(latitude, longitude) {
     if (marker) {
@@ -57,6 +74,7 @@
       });
     }
     pin = { latitude, longitude, inside: false };
+    locationContinue.disabled = true;
     const ticket = ++lookup;
     say(locationStatus, "Checking the location…");
     try {
@@ -65,8 +83,12 @@
       if (ticket !== lookup) return;
       if (!response.ok) throw new Error(payload.error?.message || "The location could not be checked.");
       pin.inside = payload.inside_basey === true;
-      if (pin.inside) say(locationStatus, `Barangay ${payload.barangay?.name || "not identified"} — drag the pin to adjust.`, "ok");
-      else say(locationStatus, "This point is outside Basey. Move the pin to where the damage is.", "error");
+      if (pin.inside) {
+        say(locationStatus, `Barangay ${payload.barangay?.name || "not identified"} — drag the pin to adjust.`, "ok");
+        locationContinue.disabled = false;
+      } else {
+        say(locationStatus, "This point is outside Basey. Move the pin to where the damage is.", "error");
+      }
     } catch (error) {
       if (ticket === lookup) say(locationStatus, error instanceof TypeError ? "No connection. Check your signal and place the pin again." : error.message, "error");
     }
@@ -91,6 +113,48 @@
     );
   });
 
+  // ---------------- Damage type / severity chips ----------------
+  const damageTypeInput = byId("f-damage-type");
+  const severityInput = byId("f-severity");
+  const detailsContinue = byId("step-details-continue");
+
+  const showUrgent = () => {
+    byId("urgent-callout").hidden = !(severityInput.value === "life_threatening" || damageTypeInput.value === "injured_or_trapped");
+  };
+  function refreshDetailsValidity() {
+    detailsContinue.disabled = !(damageTypeInput.value && severityInput.value);
+  }
+  document.querySelectorAll("#damage-type-grid .rd-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll("#damage-type-grid .rd-chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
+      chip.setAttribute("aria-pressed", "true");
+      damageTypeInput.value = chip.dataset.value;
+      showUrgent();
+      refreshDetailsValidity();
+    });
+  });
+  document.querySelectorAll("#severity-grid button").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("#severity-grid button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      button.setAttribute("aria-pressed", "true");
+      severityInput.value = button.dataset.value;
+      showUrgent();
+      refreshDetailsValidity();
+    });
+  });
+
+  // ---------------- People affected stepper ----------------
+  const peopleInput = byId("f-people");
+  const peopleCount = byId("people-count");
+  function setPeople(value) {
+    const clamped = Math.max(0, Math.min(100000, value));
+    peopleInput.value = String(clamped);
+    peopleCount.textContent = String(clamped);
+  }
+  byId("people-minus").addEventListener("click", () => setPeople(Number(peopleInput.value) - 1));
+  byId("people-plus").addEventListener("click", () => setPeople(Number(peopleInput.value) + 1));
+
+  // ---------------- Photos ----------------
   async function shrink(file) {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
@@ -104,76 +168,87 @@
     });
   }
 
-  function renderPhotos() {
-    const list = byId("photo-previews");
-    list.querySelectorAll("img").forEach((image) => URL.revokeObjectURL(image.src));
-    list.replaceChildren(...photos.map((blob, index) => {
-      const item = document.createElement("li");
-      const image = document.createElement("img");
-      image.src = URL.createObjectURL(blob);
-      image.alt = `Photo ${index + 1}`;
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.textContent = "Remove";
-      remove.setAttribute("aria-label", `Remove photo ${index + 1}`);
-      remove.addEventListener("click", () => {
-        photos.splice(index, 1);
-        say(photoStatus, "");
-        renderPhotos();
-      });
-      item.append(image, remove);
-      return item;
-    }));
-    if (!photoStatus.dataset.kind) photoStatus.textContent = `${photos.length} of ${MAX_PHOTOS} photos`;
+  function renderPhotoStatus() {
+    const filled = photos.filter(Boolean).length;
+    if (!photoStatus.dataset.kind) photoStatus.textContent = `${filled} of ${MAX_PHOTOS} photos`;
   }
 
-  byId("photos").addEventListener("change", async (event) => {
-    const files = [...event.target.files];
-    event.target.value = "";
-    say(photoStatus, "Preparing photos…");
-    for (const file of files) {
-      if (photos.length >= MAX_PHOTOS) {
-        say(photoStatus, `You can attach up to ${MAX_PHOTOS} photos.`, "error");
-        break;
-      }
+  document.querySelectorAll("[data-slot-input]").forEach((input) => {
+    const slot = Number(input.dataset.slotInput);
+    input.addEventListener("change", async () => {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      const tile = input.closest(".rd-photo-tile");
+      say(photoStatus, "Preparing photo…");
       try {
-        photos.push(await shrink(file));
+        const blob = await shrink(file);
+        photos[slot] = blob;
+        const url = URL.createObjectURL(blob);
+        tile.style.backgroundImage = `url(${url})`;
+        tile.classList.add("filled");
+        say(photoStatus, "");
+        renderPhotoStatus();
       } catch {
         say(photoStatus, "This photo type isn't supported. Use the camera or a JPEG photo.", "error");
       }
-    }
-    renderPhotos();
+    });
   });
+  document.querySelectorAll("[data-remove]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const slot = Number(button.dataset.remove);
+      photos[slot] = null;
+      const tile = button.closest(".rd-photo-tile");
+      tile.style.backgroundImage = "";
+      tile.classList.remove("filled");
+      say(photoStatus, "");
+      renderPhotoStatus();
+    });
+  });
+  renderPhotoStatus();
 
-  const showUrgent = () => {
-    byId("urgent-callout").hidden = !(form.elements.severity.value === "life_threatening" || form.elements.damage_type.value === "injured_or_trapped");
-  };
-  form.elements.severity.addEventListener("change", showUrgent);
-  form.elements.damage_type.addEventListener("change", showUrgent);
+  // ---------------- Contact validity ----------------
+  const nameInput = byId("f-name");
+  const phoneInput = byId("f-phone");
+  const consentInput = byId("f-consent");
+  const sendButton = byId("send-report");
+  function refreshContactValidity() {
+    sendButton.disabled = !(nameInput.value.trim().length > 1 && phoneInput.value.trim().length > 6 && consentInput.checked);
+  }
+  [nameInput, phoneInput].forEach((input) => input.addEventListener("input", refreshContactValidity));
+  consentInput.addEventListener("change", refreshContactValidity);
+  refreshContactValidity();
 
+  // ---------------- Submit ----------------
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!pin?.inside) {
+      showStep("location");
       say(locationStatus, "Place the pin inside Basey where the damage is.", "error");
-      byId("report-map").scrollIntoView({ block: "center" });
       byId("report-map").focus({ preventScroll: true });
       return;
     }
     const data = new FormData(form);
     data.set("latitude", String(pin.latitude));
     data.set("longitude", String(pin.longitude));
-    photos.forEach((blob, index) => data.append("photo", blob, `photo-${index + 1}.jpg`));
-    const button = byId("send-report");
-    button.disabled = true;
+    photos.forEach((blob, index) => {
+      if (blob) data.append("photo", blob, `photo-${index + 1}.jpg`);
+    });
+    sendButton.disabled = true;
     say(formStatus, "Sending your report…");
     try {
       const response = await fetch("/api/v1/reports", { method: "POST", body: data, headers: { Accept: "application/json" } });
       const payload = await response.json().catch(() => ({}));
       if (response.status === 201) {
-        form.hidden = true;
+        document.querySelectorAll(".rd-step[data-step]").forEach((section) => { section.hidden = true; });
         byId("report-number").textContent = `#${payload.id}`;
-        byId("report-success").hidden = false;
-        byId("report-success").querySelector("h2").focus();
+        const urgent = severityInput.value === "life_threatening" || damageTypeInput.value === "injured_or_trapped";
+        byId("success-urgent-note").hidden = !urgent;
+        const success = byId("report-success");
+        success.hidden = false;
+        success.querySelector("h2").focus();
         return;
       }
       if (response.status === 429) throw new Error("Too many reports from this network right now. Wait a minute, then tap Send again. Your answers are kept.");
@@ -181,7 +256,7 @@
     } catch (error) {
       say(formStatus, error instanceof TypeError ? "No connection. Your answers are kept. Tap Send again when you have signal." : error.message, "error");
     } finally {
-      button.disabled = false;
+      refreshContactValidity();
     }
   });
 })();
