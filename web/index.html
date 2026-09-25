@@ -4,622 +4,89 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore selected GeoRiskPH hazard layers and generate an explainable preliminary multi-hazard screening report for locations in Basey, Samar.">
-  <meta name="theme-color" content="#073b4c">
-  <meta property="og:title" content="Basafe | Public multi-hazard screening for Basey">
-  <meta property="og:description" content="Understand the documented hazard conditions affecting a location.">
-  <meta property="og:image" content="/og.png">
-  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#1FAE73">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/site.css?v=0.6.7">
+  <link rel="stylesheet" href="/redesign.css?v=0.1.0">
   <title>Basafe | Public Multi-Hazard Mapping for Basey</title>
-  <script defer src="/landing.js?v=0.6.1"></script>
   <script defer src="/pwa.js?v=0.6.2"></script>
 </head>
-<body class="landing-page">
-  <a class="skip-link" href="#main-content">Skip to main content</a>
-
-  <!-- HEADER -->
-  <header class="site-header" data-header>
-    <div class="site-header-inner">
-      <a class="site-brand" href="/" aria-label="Basafe home">
-        <img class="logo-pin" src="/icons/basafe-logo-256.png" alt="">
-        <span><strong>Basafe</strong><small>Basey, Samar</small></span>
-      </a>
-      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-navigation">Menu</button>
-      <nav id="site-navigation" class="site-nav" aria-label="Primary navigation">
-        <a href="#how-it-works">How It Works</a>
-        <a href="#hazards">Data Layers</a>
-        <a href="/report-damage">Report Damage</a>
-        <a href="/methodology">Methodology</a>
-        <a href="/limitations">Limitations</a>
-        <a href="/about">About</a>
-        <a class="mobile-nav-cta" href="/map">Score a Location</a>
-      </nav>
-      <div class="header-actions">
-        <button class="button button-quiet install-button" type="button" data-install hidden>Install App</button>
-        <a class="button button-primary" href="/map" id="header-cta">Score a Location</a>
-      </div>
-    </div>
-  </header>
-
-  <div id="offline-banner" class="offline-banner" role="status" hidden>
-    You are offline. Previously viewed information may be available, but new hazard data and complete scores may require an internet connection.
+<body class="redesign">
+  <div id="offline-banner" role="status" hidden style="padding:.65rem 1rem;color:#5c1b21;background:#fdecec;text-align:center;font-size:.84rem;font-weight:700;">
+    You are offline. Previously viewed information may be available, but new hazard data and complete scores may require a connection.
   </div>
 
-  <main id="main-content">
+  <div class="rd-home-shell">
 
-    <!-- HERO -->
-    <section class="hero section-shell">
-
-      <!-- Background vector art -->
-      <svg class="hero-bg-vectors" aria-hidden="true" viewBox="0 0 1200 700" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M0 580 Q200 540 400 560 Q600 580 800 520 Q1000 460 1200 490" stroke="rgba(18,165,156,0.12)" stroke-width="1.5" fill="none"/>
-        <path d="M0 620 Q180 590 360 600 Q540 610 720 570 Q900 530 1200 550" stroke="rgba(18,165,156,0.08)" stroke-width="1" fill="none"/>
-        <path d="M100 0 L120 700" stroke="rgba(18,165,156,0.06)" stroke-width="1"/>
-        <path d="M280 0 L300 700" stroke="rgba(18,165,156,0.06)" stroke-width="1"/>
-        <circle cx="80" cy="200" r="120" stroke="rgba(18,165,156,0.06)" stroke-width="1" fill="none"/>
-        <circle cx="80" cy="200" r="180" stroke="rgba(18,165,156,0.04)" stroke-width="1" fill="none"/>
-      </svg>
-
-      <div class="hero-copy">
-        <p class="eyebrow">Public Web-GIS · Basey, Samar</p>
-        <h1>Understand the hazards affecting a location.</h1>
-        <p class="hero-lede">View selected GeoRiskPH hazard layers and generate an explainable preliminary multi-hazard screening report for any location within Basey, Samar.</p>
-        <div class="hero-actions">
-          <a class="button button-primary button-large" href="/map" id="hero-cta-primary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            Score a Location
-          </a>
-          <button class="button button-secondary button-large install-button" type="button" data-install id="hero-cta-install" hidden>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Install App
-          </button>
-          <a class="button button-ghost button-large" href="#how-it-works" id="hero-cta-learn">How It Works</a>
-        </div>
-        <p class="micro-disclaimer">Basafe provides preliminary screening information and does not declare a location safe or unsafe.</p>
-      </div>
-
-      <!-- ISOMETRIC VISUALIZATION CARD -->
-      <div class="iso-card" id="iso-card" aria-label="Stacked isometric preview of the three hazard layers: Flood, Liquefaction, and Ground Shaking">
-
-        <!-- Top badge -->
-        <div class="iso-badge">
-          <span class="iso-badge-dot"></span>
-          Selected GeoRiskPH Layers
-        </div>
-
-        <!-- Filter pills -->
-        <div class="iso-pills" role="group" aria-label="Highlight hazard layer">
-          <button class="iso-pill pill-flood active" id="pill-flood" data-layer="flood" aria-pressed="true">
-            <span class="pill-dot"></span> Flood
-          </button>
-          <button class="iso-pill pill-liq" id="pill-liq" data-layer="liquefaction" aria-pressed="false">
-            <span class="pill-dot"></span> Liquefaction
-          </button>
-          <button class="iso-pill pill-shake" id="pill-shake" data-layer="shaking" aria-pressed="false">
-            <span class="pill-dot"></span> Ground Shaking
-          </button>
-        </div>
-
-        <!-- Stacked isometric SVG layers -->
-        <div class="iso-scene" aria-hidden="true">
-
-          <!-- Ground Shaking layer (top) -->
-          <div class="iso-layer layer-shake" id="layer-shake">
-            <svg viewBox="0 0 380 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Plate -->
-              <path d="M10 80 L190 10 L370 80 L190 150 Z" fill="rgba(100,60,120,0.55)" stroke="rgba(200,160,220,0.5)" stroke-width="1.5"/>
-              <!-- Shaking rings -->
-              <ellipse cx="190" cy="78" rx="28" ry="14" fill="none" stroke="rgba(200,140,230,0.9)" stroke-width="2.5"/>
-              <ellipse cx="190" cy="78" rx="50" ry="25" fill="none" stroke="rgba(200,140,230,0.65)" stroke-width="1.8"/>
-              <ellipse cx="190" cy="78" rx="76" ry="38" fill="none" stroke="rgba(200,140,230,0.4)" stroke-width="1.2"/>
-              <ellipse cx="190" cy="78" rx="108" ry="54" fill="none" stroke="rgba(200,140,230,0.22)" stroke-width="1"/>
-              <!-- Intensity labels -->
-              <rect x="210" y="64" width="36" height="16" rx="4" fill="rgba(120,60,150,0.85)"/>
-              <text x="228" y="76" text-anchor="middle" fill="white" font-size="8" font-weight="700" font-family="Inter,sans-serif">VIII</text>
-              <rect x="240" y="52" width="28" height="14" rx="4" fill="rgba(120,60,150,0.7)"/>
-              <text x="254" y="63" text-anchor="middle" fill="white" font-size="7" font-weight="700" font-family="Inter,sans-serif">VII</text>
-              <!-- Shaking intensity tooltip -->
-              <rect x="108" y="55" width="134" height="26" rx="7" fill="rgba(255,255,255,0.95)" filter="url(#drop-shadow)"/>
-              <text x="122" y="72" fill="#4a2570" font-size="9" font-weight="700" font-family="Inter,sans-serif">Shaking Intensity: VI</text>
-              <defs>
-                <filter id="drop-shadow" x="-20%" y="-40%" width="140%" height="180%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.18)"/>
-                </filter>
-              </defs>
-            </svg>
-            <!-- Layer label -->
-            <div class="layer-label label-shake">Ground Shaking</div>
-          </div>
-
-          <!-- Liquefaction layer (middle) -->
-          <div class="iso-layer layer-liq" id="layer-liq">
-            <svg viewBox="0 0 380 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Plate -->
-              <path d="M10 80 L190 10 L370 80 L190 150 Z" fill="rgba(160,110,20,0.55)" stroke="rgba(240,195,80,0.5)" stroke-width="1.5"/>
-              <!-- Liquefaction blobs -->
-              <path d="M100 90 Q130 60 160 80 Q185 94 210 75 Q240 55 270 85 Q295 105 250 115 Q200 128 155 115 Q115 104 100 90Z" fill="rgba(230,180,50,0.55)" stroke="rgba(240,195,80,0.7)" stroke-width="1.2"/>
-              <path d="M130 82 Q150 65 175 76 Q200 88 225 72 Q250 60 265 82 Q275 96 235 105 Q190 116 155 106 Q128 98 130 82Z" fill="rgba(230,165,30,0.4)" stroke="rgba(240,195,80,0.5)" stroke-width="1"/>
-              <!-- membership tooltip -->
-              <rect x="168" y="106" width="180" height="28" rx="7" fill="rgba(255,255,255,0.95)" filter="url(#drop-shadow2)"/>
-              <text x="182" y="123" fill="#8a5c10" font-size="9" font-weight="700" font-family="Inter,sans-serif">Liquefaction: 0.7 (Mod. High)</text>
-              <defs>
-                <filter id="drop-shadow2" x="-10%" y="-30%" width="120%" height="160%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.18)"/>
-                </filter>
-              </defs>
-            </svg>
-            <div class="layer-label label-liq">Liquefaction</div>
-          </div>
-
-          <!-- Flood layer (bottom) -->
-          <div class="iso-layer layer-flood" id="layer-flood">
-            <svg viewBox="0 0 380 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Plate -->
-              <path d="M10 80 L190 10 L370 80 L190 150 Z" fill="rgba(18,80,130,0.55)" stroke="rgba(100,190,230,0.5)" stroke-width="1.5"/>
-              <!-- River channels -->
-              <path d="M60 100 Q110 70 155 88 Q185 100 210 82 Q245 62 290 92" stroke="rgba(100,210,240,0.9)" stroke-width="4.5" fill="none" stroke-linecap="round"/>
-              <path d="M80 108 Q120 82 160 95 Q192 105 215 88" stroke="rgba(100,210,240,0.5)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <!-- Flood zones -->
-              <ellipse cx="175" cy="90" rx="72" ry="32" fill="rgba(30,120,200,0.42)" stroke="rgba(80,190,230,0.7)" stroke-width="1.2"/>
-              <ellipse cx="175" cy="90" rx="48" ry="22" fill="rgba(30,120,200,0.35)" stroke="rgba(80,190,230,0.5)" stroke-width="1"/>
-              <!-- membership tooltip -->
-              <rect x="50" y="112" width="162" height="28" rx="7" fill="rgba(255,255,255,0.95)" filter="url(#drop-shadow3)"/>
-              <text x="64" y="129" fill="#0d4f82" font-size="9" font-weight="700" font-family="Inter,sans-serif">Flood: 0.8 (High Risk)</text>
-              <defs>
-                <filter id="drop-shadow3" x="-10%" y="-30%" width="120%" height="160%">
-                  <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.18)"/>
-                </filter>
-              </defs>
-            </svg>
-            <div class="layer-label label-flood">Flood</div>
-          </div>
-
-          <!-- Location pin + data streams -->
-          <div class="iso-pin-wrap" aria-hidden="true">
-            <!-- Data stream lines connecting pin through all layers -->
-            <svg class="data-streams" viewBox="0 0 60 260" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="30" y1="0" x2="30" y2="260" stroke="url(#streamGrad)" stroke-width="1.5" stroke-dasharray="4 4"/>
-              <circle class="stream-dot" cx="30" cy="60" r="4" fill="#c084fc"/>
-              <circle class="stream-dot" cx="30" cy="130" r="4" fill="#fbbf24"/>
-              <circle class="stream-dot" cx="30" cy="200" r="4" fill="#38bdf8"/>
-              <defs>
-                <linearGradient id="streamGrad" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
-                  <stop offset="0%" stop-color="#c084fc"/>
-                  <stop offset="50%" stop-color="#fbbf24"/>
-                  <stop offset="100%" stop-color="#38bdf8"/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <!-- Pin -->
-            <div class="iso-pin">
-              <div class="pin-inner"></div>
-              <div class="pin-pulse"></div>
-              <div class="pin-pulse pin-pulse-2"></div>
-            </div>
-          </div>
-
-        </div><!-- /iso-scene -->
-
-        <!-- Bottom info card -->
-        <div class="iso-info-card">
-          <div class="iso-info-left">
-            <span class="iso-info-label">ILLUSTRATIVE PREVIEW</span>
-            <strong class="iso-info-title">Explainable scoring</strong>
-            <span class="iso-info-sub">Source values · memberships · rules</span>
-          </div>
-          <div class="iso-info-right">
-            <p>Rule 1 (Flood): If membership &gt; 0.6, hazard = Elevated.</p>
-            <p>Rule 2 (Shaking): If Intensity &gt; IV, hazard = Moderate.</p>
-          </div>
-        </div>
-
-      </div><!-- /iso-card -->
-
-    </section><!-- /hero -->
-
-    <!-- TRUST STRIP -->
-    <section class="trust-strip" aria-label="Basafe capabilities">
-      <div>
-        <span class="trust-num">01</span>
-        <div class="trust-text">
-          <strong>GeoRiskPH hazard layers</strong>
-          <small>Flood · Liquefaction · Ground Shaking</small>
-        </div>
-      </div>
-      <div>
-        <span class="trust-num">02</span>
-        <div class="trust-text">
-          <strong>Explainable fuzzy scoring</strong>
-          <small>All rules and memberships exposed</small>
-        </div>
-      </div>
-      <div>
-        <span class="trust-num">03</span>
-        <div class="trust-text">
-          <strong>Publicly accessible Web-GIS</strong>
-          <small>No account required</small>
-        </div>
-      </div>
-      <div>
-        <span class="trust-num">04</span>
-        <div class="trust-text">
-          <strong>Downloadable PDF reports</strong>
-          <small>Shareable preliminary score</small>
-        </div>
-      </div>
-    </section>
-
-    <!-- HOW IT WORKS -->
-    <section id="how-it-works" class="content-section section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">How it works</p>
-        <h2>From a point on the map to an understandable result</h2>
-        <p>Every step keeps the original source evidence visible and treats unavailable data honestly.</p>
-      </div>
-      <ol class="step-grid">
-        <li>
-          <svg class="step-visual" viewBox="0 0 160 92" aria-hidden="true">
-            <path class="vector-grid" d="M12 18h136M12 46h136M12 74h136M38 8v76M80 8v76M122 8v76"/>
-            <path class="vector-route" d="M18 70c20-18 32-9 48-25s29-18 47-7 24-4 32-17"/>
-            <g class="step-pin">
-              <path class="vector-primary" d="M80 19c-11 0-20 8.4-20 18.8 0 14.1 20 31.2 20 31.2s20-17.1 20-31.2C100 27.4 91 19 80 19Z"/>
-              <circle class="vector-surface" cx="80" cy="38" r="7"/>
-            </g>
-          </svg>
-          <span class="step-num">1</span>
-          <h3>Select a Location</h3>
-          <p>Search for a place, enter coordinates, use your current location, or click the map.</p>
-        </li>
-        <li>
-          <svg class="step-visual" viewBox="0 0 160 92" aria-hidden="true">
-            <path class="vector-layer vector-flood" d="m22 62 58-23 58 23-58 23-58-23Z"/>
-            <path class="vector-layer vector-liquefaction" d="m22 46 58-23 58 23-58 23-58-23Z"/>
-            <path class="vector-layer vector-shaking" d="m22 30 58-23 58 23-58 23-58-23Z"/>
-            <path class="vector-contour" d="M51 31c13-10 22 8 34-1s18-3 25 4M49 48c17-11 26 9 40 0s22-2 28 3M50 65c14-10 24 7 38 0s22-3 28 2"/>
-          </svg>
-          <span class="step-num">2</span>
-          <h3>View Hazard Layers</h3>
-          <p>Examine available flood, liquefaction, and ground-shaking layers with legends and sources.</p>
-        </li>
-        <li>
-          <svg class="step-visual" viewBox="0 0 160 92" aria-hidden="true">
-            <path class="vector-connector" d="M31 24 76 46 31 70M76 46l50-23M76 46l50 24"/>
-            <circle class="vector-node vector-node-a" cx="31" cy="24" r="12"/>
-            <circle class="vector-node vector-node-b" cx="31" cy="70" r="12"/>
-            <circle class="vector-node vector-node-c" cx="76" cy="46" r="16"/>
-            <circle class="vector-node vector-node-d" cx="126" cy="23" r="12"/>
-            <circle class="vector-node vector-node-e" cx="126" cy="70" r="12"/>
-            <path class="vector-spark" d="m71 47 4-8 4 8 8 4-8 4-4 8-4-8-8-4 8-4Z"/>
-          </svg>
-          <span class="step-num">3</span>
-          <h3>Generate a Score</h3>
-          <p>Process valid source classifications through the documented fuzzy model.</p>
-        </li>
-        <li>
-          <svg class="step-visual" viewBox="0 0 160 92" aria-hidden="true">
-            <path class="vector-document" d="M43 8h58l18 18v58H43V8Z"/>
-            <path class="vector-fold" d="M101 8v19h18"/>
-            <path class="vector-report-line" d="M58 65h46M58 74h33"/>
-            <path class="vector-chart" d="M59 52V40m14 12V29m14 23V35m14 17V22"/>
-            <circle class="vector-badge" cx="119" cy="69" r="17"/>
-            <path class="vector-check" d="m111 69 5 5 11-12"/>
-          </svg>
-          <span class="step-num">4</span>
-          <h3>Understand the Result</h3>
-          <p>Review inputs, rules, warnings, recommendations, and the downloadable report.</p>
-        </li>
-      </ol>
-    </section>
-
-    <!-- DATA LAYERS — card-based system -->
-    <section id="hazards" class="content-section section-tint">
-      <div class="section-shell">
-        <div class="section-heading">
-          <p class="eyebrow">Hazards included</p>
-          <h2>Three evidence layers, kept distinct</h2>
-          <p>Each hazard is assessed independently. Classifications come from configured source metadata — Basafe never invents unavailable values.</p>
-        </div>
-        <div class="data-layer-cards">
-
-          <article class="dlc dlc-flood">
-            <div class="dlc-icon" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c0-2 1.5-3.5 3-3.5s3 1.5 3 3.5 1.5 3.5 3 3.5 3-1.5 3-3.5 1.5-3.5 3-3.5"/><path d="M3 10c0-4 2-6 9-6s9 2 9 6"/><path d="M12 4v4"/></svg>
-            </div>
-            <div class="dlc-body">
-              <h3>Flood Susceptibility</h3>
-              <p>Shows documented flood-susceptibility classifications from MGB-verified polygon layers for the selected point.</p>
-            </div>
-            <a class="button button-view-data" href="/data-sources#flood" id="view-flood-data">View Data</a>
-          </article>
-
-          <article class="dlc dlc-liq">
-            <div class="dlc-icon" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6 10 2 14 2 17a10 10 0 0 0 20 0c0-3-4-7-10-15z"/><path d="M12 17v-5"/><path d="M9 14l3 3 3-3"/></svg>
-            </div>
-            <div class="dlc-body">
-              <h3>Liquefaction Susceptibility</h3>
-              <p>Shows documented liquefaction classifications from PHIVOLCS polygon data, without replacing local site investigation.</p>
-            </div>
-            <a class="button button-view-data" href="/data-sources#liquefaction" id="view-liq-data">View Data</a>
-          </article>
-
-          <article class="dlc dlc-shake">
-            <div class="dlc-icon" aria-hidden="true">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l3-8 4 16 3-8 4 0"/></svg>
-            </div>
-            <div class="dlc-body">
-              <h3>Ground Shaking</h3>
-              <p>Derived from official PHIVOLCS Region VIII scenario maps. An unavailable layer blocks a complete score to prevent incomplete scoring.</p>
-            </div>
-            <a class="button button-view-data" href="/data-sources#ground-shaking" id="view-shake-data">View Data</a>
-          </article>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- SCORE SECTION -->
-    <section class="score-section section-shell">
-      <div class="score-copy">
-        <p class="eyebrow">How the score works</p>
-        <h2>A relative 0–100 screening result — not a safety rating</h2>
-        <p>The configured model combines only the required, valid hazard inputs. Interpretation bands describe relative screening concern and remain subject to model validation.</p>
-        <div class="warning-callout">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          The score is a relative screening result based only on selected available hazard inputs. It is not a probability of disaster, a safety rating, or an official site certification.
-        </div>
-      </div>
-      <div class="score-bands" aria-label="Five descriptive score bands">
-        <div class="band very-low"><span>0–20</span><strong>Very Low</strong></div>
-        <div class="band low"><span>21–40</span><strong>Low</strong></div>
-        <div class="band moderate"><span>41–60</span><strong>Moderate</strong></div>
-        <div class="band high"><span>61–80</span><strong>High</strong></div>
-        <div class="band very-high"><span>81–100</span><strong>Very High</strong></div>
-      </div>
-    </section>
-
-    <!-- EXPLAINABILITY SECTION -->
-    <section class="content-section section-shell explain-section">
-      <div class="section-heading">
-        <p class="eyebrow">Why the result is explainable</p>
-        <h2>See how the result was produced</h2>
-        <p>The score does not hide the evidence behind a single number.</p>
-      </div>
-      <div class="explain-flow" aria-label="Score explanation flow">
-        <span>Source classifications</span><i aria-hidden="true">→</i>
-        <span>Normalized inputs</span><i aria-hidden="true">→</i>
-        <span>Objective weights</span><i aria-hidden="true">→</i>
-        <span>Fuzzy memberships</span><i aria-hidden="true">→</i>
-        <span>Activated rules</span><i aria-hidden="true">→</i>
-        <span>Screening result</span>
-      </div>
-      <div class="explain-list">
-        <p>Each score exposes source hazard values, normalized inputs, applied weights, membership categories, principal rules, missing-data conditions, the final category, and a plain-language explanation.</p>
-        <a class="text-link" href="/methodology">Read the full methodology →</a>
-      </div>
-    </section>
-
-    <!-- WHO THIS IS FOR -->
-    <section class="content-section section-tint split-section">
-      <div class="section-shell split-shell">
-        <div>
-          <p class="eyebrow">Who this is for</p>
-          <h2>Prepare better questions before making decisions</h2>
-          <ul class="check-list">
-            <li>Learn about documented hazards near a residence</li>
-            <li>Conduct preliminary property research</li>
-            <li>Support school or community research</li>
-            <li>Compare locations for planning discussions</li>
-            <li>Prepare questions for appropriate authorities</li>
-          </ul>
-        </div>
-        <aside class="principle-card">
-          <span>Guiding principle</span>
-          <strong>Further investigation, not automatic judgment.</strong>
-          <p>Basafe supports early understanding and does not replace professional, regulatory, or official assessment.</p>
-        </aside>
-      </div>
-    </section>
-
-    <!-- LIMITATIONS -->
-    <section class="content-section section-shell">
-      <div class="section-heading">
-        <p class="eyebrow">Limitations</p>
-        <h2>Clear boundaries protect against overinterpretation</h2>
-      </div>
-      <div class="limitation-grid">
-        <span>Selected hazards only</span>
-        <span>Basey, Samar only</span>
-        <span>Dependent on source availability</span>
-        <span>Not an emergency-warning system</span>
-        <span>Not a field inspection</span>
-        <span>Not a structural assessment</span>
-        <span>Not a zoning approval</span>
-        <span>Not a safe-or-unsafe declaration</span>
-      </div>
-      <a class="text-link" href="/limitations">Read all limitations →</a>
-    </section>
-
-    <!-- PWA SECTION -->
-    <section id="install-app" class="pwa-section section-shell">
-      <div>
-        <p class="eyebrow">Installable web app</p>
-        <h2>Keep Basafe close at hand</h2>
-        <p>Supported devices can install the application for faster repeat visits and offline access to the application shell and previously permitted content.</p>
-        <button class="button button-primary install-button" type="button" data-install id="pwa-install-btn" hidden>Install Basafe</button>
-      </div>
-      <div class="pwa-visual-panel">
-        <svg class="pwa-illustration" viewBox="0 0 520 360" role="img" aria-labelledby="pwa-illustration-title">
-          <title id="pwa-illustration-title">Basafe mobile map showing a selected location and three hazard layers</title>
-          <path class="pwa-orbit" d="M47 255c77 72 225 88 356 24 83-41 99-116 57-170"/>
-          <circle class="pwa-orbit-dot" cx="48" cy="255" r="7"/>
-          <g class="pwa-phone">
-            <rect class="pwa-phone-shell" x="146" y="18" width="230" height="324" rx="32"/>
-            <rect class="pwa-screen" x="162" y="51" width="198" height="258" rx="17"/>
-            <rect class="pwa-speaker" x="225" y="31" width="72" height="7" rx="4"/>
-            <path class="pwa-map-land" d="M162 196c38-16 59-2 91-20 30-17 56-8 107-31v164H162V196Z"/>
-            <path class="pwa-map-water" d="M162 225c39-17 71-5 101-22 36-20 62-10 97-31v137H162v-84Z"/>
-            <path class="pwa-map-road" d="M172 268c34-42 59-20 88-56 29-37 52-23 90-72"/>
-            <path class="pwa-map-road pwa-map-road-secondary" d="M180 100c28 22 46 29 71 20 33-13 52 2 93 34"/>
-            <g class="pwa-map-pin">
-              <circle class="pwa-pin-ring" cx="262" cy="173" r="30"/>
-              <path class="pwa-pin" d="M262 119c-24 0-43 18-43 41 0 32 43 70 43 70s43-38 43-70c0-23-19-41-43-41Z"/>
-              <circle class="pwa-pin-center" cx="262" cy="160" r="13"/>
-            </g>
-            <g class="pwa-status-card">
-              <rect x="177" y="65" width="168" height="44" rx="12"/>
-              <circle cx="194" cy="87" r="6"/>
-              <path d="M208 82h79M208 93h54"/>
-            </g>
-            <circle class="pwa-home-button" cx="261" cy="326" r="8"/>
-          </g>
-          <g class="pwa-layer-chip pwa-chip-flood">
-            <rect x="32" y="74" width="126" height="43" rx="13"/>
-            <circle cx="52" cy="95" r="7"/>
-            <path d="M68 90h69M68 101h44"/>
-          </g>
-          <g class="pwa-layer-chip pwa-chip-liq">
-            <rect x="360" y="120" width="136" height="43" rx="13"/>
-            <circle cx="381" cy="141" r="7"/>
-            <path d="M397 136h76M397 147h48"/>
-          </g>
-          <g class="pwa-layer-chip pwa-chip-shake">
-            <rect x="350" y="238" width="143" height="43" rx="13"/>
-            <circle cx="371" cy="259" r="7"/>
-            <path d="M387 254h82M387 265h53"/>
-          </g>
-        </svg>
-        <ul class="pwa-feature-list">
-          <li>Home-screen installation</li>
-          <li>Mobile-friendly interface</li>
-          <li>Clear source and synchronization status</li>
-          <li>Honest offline limitations</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- FAQ -->
-    <section class="content-section section-shell faq-section">
-      <div class="section-heading">
-        <p class="eyebrow">Frequently asked questions</p>
-        <h2>Know what the system can — and cannot — tell you</h2>
-      </div>
-      <div class="faq-list">
-        <details><summary>Does Basafe determine whether a place is safe?</summary><p>No. It provides a preliminary relative screening result and never declares a location safe or unsafe.</p></details>
-        <details><summary>Where does the hazard information come from?</summary><p>From selected configured GeoRiskPH services and appropriate datasets published by mandated agencies, with Basey context when permitted.</p></details>
-        <details><summary>Why can some layers be unavailable?</summary><p>A service may be unreachable, outside coverage, invalid, or not yet configured with a verified authorized endpoint.</p></details>
-        <details><summary>What does the 0–100 score mean?</summary><p>It is a relative screening output from the configured fuzzy model, not a probability, forecast, or safety grade.</p></details>
-        <details><summary>Can the report be used for a building permit or property certification?</summary><p>No. It is not an official hazard certification, zoning approval, engineering clearance, or permit recommendation.</p></details>
-        <details><summary>Is an account required?</summary><p>No. Core mapping, scoring, explanation, and report functions are public.</p></details>
-        <details><summary>Can the application work offline?</summary><p>The application shell and some previously viewed information may be available, but new hazard data and complete scores normally require a connection.</p></details>
-        <details><summary>Who should users consult for an official assessment?</summary><p>Consult the relevant mandated hazard agency and qualified planning, engineering, geological, or geotechnical professionals.</p></details>
-      </div>
-    </section>
-
-    <!-- FINAL CTA -->
-    <section class="final-cta">
-      <svg class="final-cta-art" viewBox="0 0 1440 330" aria-hidden="true" preserveAspectRatio="none">
-        <path d="M-30 272C163 210 277 310 461 241s282-26 428 10 269-92 581-36"/>
-        <path d="M-20 304c201-48 323 31 502-20s288-20 434 9 283-55 546-40"/>
-        <circle cx="1240" cy="84" r="84"/>
-        <circle cx="1240" cy="84" r="128"/>
-      </svg>
-      <div class="section-shell final-cta-inner">
-        <div>
-          <p class="eyebrow">Start with the evidence</p>
-          <h2>Understand the documented hazard conditions affecting a location.</h2>
-        </div>
-        <a class="button button-light button-large" href="/map" id="final-cta-btn">Score a Location</a>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- FOOTER -->
-  <footer class="site-footer">
-    <div class="footer-top">
-      <div class="footer-brand-col">
-        <a class="site-brand footer-brand" href="/">
-          <img class="logo-pin" src="/icons/basafe-logo-256.png" alt="">
-          <span><strong>Basafe</strong><small>Public Multi-Hazard Mapping · Basey, Samar</small></span>
-        </a>
-        <p>Research-based public decision support using selected available data.</p>
-      </div>
-      <nav aria-label="Footer navigation" class="footer-nav">
-        <a href="/map">Scoring Map</a>
-        <a href="/data-sources">Data Sources</a>
-        <a href="/methodology">Methodology</a>
-        <a href="/limitations">Limitations</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/about">About</a>
+    <div class="rd-top-bar">
+      <a class="rd-brand" href="/"><img src="/icons/basafe-logo-256.png" alt=""><span><strong>Basafe</strong><small>Basey, Samar</small></span></a>
+      <nav class="rd-top-nav" aria-label="Primary">
+        <a href="/map">Map</a>
+        <a href="/report-damage">Report Damage</a>
+        <a href="/data-sources">Data Layers</a>
+        <a href="/about">Info</a>
       </nav>
-    </div>
-
-    <!-- TRUSTED DATA SOURCES section -->
-    <div class="trusted-sources">
-      <p class="trusted-label">Data sources</p>
-      <div class="trusted-logos">
-        <div class="trusted-logo-item">
-          <div class="trusted-logo-badge badge-ndrrmc" aria-label="NDRRMC">
-            <span>NDRRMC</span>
-          </div>
-          <small>National Disaster Risk Reduction &amp; Management Council</small>
-        </div>
-        <div class="trusted-logo-item">
-          <div class="trusted-logo-badge badge-phivolcs" aria-label="PHIVOLCS">
-            <span>PHIVOLCS</span>
-          </div>
-          <small>Philippine Institute of Volcanology &amp; Seismology</small>
-        </div>
-        <div class="trusted-logo-item">
-          <div class="trusted-logo-badge badge-mgb" aria-label="MGB">
-            <span>MGB</span>
-          </div>
-          <small>Mines and Geosciences Bureau</small>
-        </div>
-        <div class="trusted-logo-item">
-          <div class="trusted-logo-badge badge-samar" aria-label="Samar Province">
-            <span>SAMAR LGU</span>
-          </div>
-          <small>Samar Provincial Government</small>
-        </div>
+      <div style="display:flex; align-items:center; gap:.6rem;">
+        <button class="rd-btn rd-btn-secondary" type="button" data-install hidden style="min-height:40px; padding:0 .9rem;">Install App</button>
+        <a class="rd-btn rd-btn-primary" href="/map" style="min-height:40px; padding:0 1.1rem;">Score a Location</a>
       </div>
-      <a class="trusted-bib-link" href="/data-sources">View full bibliography &amp; source metadata →</a>
     </div>
 
-    <div class="footer-disclaimer">
-      <strong>Research-project disclaimer</strong>
-      <p>Basafe is not an official hazard certification, emergency-warning service, zoning approval, or declaration of safety. Map © OpenStreetMap contributors. Government-source attribution appears with each layer and report.</p>
+    <div class="rd-greeting">
+      <h1>Understand the hazards affecting a location</h1>
+      <p>Public preliminary multi-hazard screening for Basey, Samar — no account required.</p>
     </div>
-  </footer>
 
-  <!-- Isometric layer interaction script -->
-  <script>
-    (function () {
-      var pills = document.querySelectorAll('.iso-pill');
-      var layers = { flood: document.getElementById('layer-flood'), liquefaction: document.getElementById('layer-liq'), shaking: document.getElementById('layer-shake') };
-      pills.forEach(function (pill) {
-        pill.addEventListener('click', function () {
-          var layer = this.dataset.layer;
-          var isActive = this.classList.contains('active');
-          // Toggle pressed state
-          this.classList.toggle('active');
-          this.setAttribute('aria-pressed', !isActive);
-          // Pulse the matching layer
-          var target = layers[layer];
-          if (target) {
-            target.classList.add('layer-pulse');
-            setTimeout(function () { target.classList.remove('layer-pulse'); }, 700);
-          }
-        });
-      });
-    })();
-  </script>
+    <a class="rd-search-link" href="/map"><span class="dot"></span>Search a place or open the map</a>
 
+    <a class="rd-map-cta" href="/map">
+      <svg class="pin" viewBox="0 0 28 34" fill="none"><path d="M14 0C6.3 0 0 6.1 0 13.6 0 23.8 14 34 14 34S28 23.8 28 13.6C28 6.1 21.7 0 14 0Z" fill="#F5F7FA"/><circle cx="14" cy="13.6" r="5.5" fill="#04140D"/></svg>
+      <strong>Select a location on the map</strong>
+      <span>View flood, liquefaction, and ground-shaking evidence, then generate a screening score.</span>
+    </a>
+
+    <div class="rd-chip-row">
+      <a class="rd-action-chip score" href="/map">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+        <span>Score</span>
+      </a>
+      <a class="rd-action-chip report" href="/report-damage">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4V4Z"/><path d="M12 8v4M12 15h.01"/></svg></span>
+        <span>Report</span>
+      </a>
+      <a class="rd-action-chip layers" href="/data-sources">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+        <span>Layers</span>
+      </a>
+    </div>
+
+    <h2 style="padding:1.5rem 1.25rem .75rem; margin:0; font-size:1.05rem; font-weight:800; letter-spacing:-.01em;">Hazards we track</h2>
+    <div class="rd-layer-list">
+      <a class="rd-layer-card rd-flood" href="/data-sources#flood">
+        <span class="dot"></span>
+        <div class="info"><strong>Flood Susceptibility</strong><span>Documented flood-susceptibility classifications from MGB-verified polygon layers for the selected point.</span></div>
+      </a>
+      <a class="rd-layer-card rd-liq" href="/data-sources#liquefaction">
+        <span class="dot"></span>
+        <div class="info"><strong>Liquefaction Susceptibility</strong><span>Documented liquefaction classifications from PHIVOLCS polygon data, without replacing local site investigation.</span></div>
+      </a>
+      <a class="rd-layer-card rd-shake" href="/data-sources#ground-shaking">
+        <span class="dot"></span>
+        <div class="info"><strong>Ground Shaking</strong><span>Derived from official PHIVOLCS Region VIII scenario maps. An unavailable layer blocks a complete score.</span></div>
+      </a>
+    </div>
+
+    <a class="rd-fab" href="/report-damage" aria-label="Report damage">+</a>
+
+    <nav class="rd-tab-bar" aria-label="Primary">
+      <a href="/" aria-current="page"><span class="glyph"></span><span>Home</span></a>
+      <a href="/map"><span class="glyph"></span><span>Map</span></a>
+      <a href="/report-damage"><span class="glyph"></span><span>Report</span></a>
+      <a href="/about"><span class="glyph"></span><span>Info</span></a>
+    </nav>
+  </div>
 </body>
 </html>

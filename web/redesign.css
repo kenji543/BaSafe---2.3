@@ -160,12 +160,14 @@
 .rd-btn {
   flex: 1; min-height: 50px; border-radius: 999px; font: inherit; font-weight: 700; font-size: .92rem;
   border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .5rem;
+  text-decoration: none; white-space: nowrap;
 }
 .rd-btn:active { transform: scale(.98); }
 .rd-btn-primary { background: var(--accent); color: var(--accent-ink); }
 .rd-btn-primary:hover { background: var(--accent-hover); }
 .rd-btn-secondary { background: var(--surface); color: var(--text); border: 1.5px solid var(--line); }
 .rd-btn[disabled] { opacity: .45; pointer-events: none; }
+.rd-btn[hidden] { display: none; }
 
 /* ---- Success ---- */
 .rd-success { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .9rem; padding: 2rem; text-align: center; }
@@ -179,4 +181,85 @@
 @media (min-width: 640px) {
   .rd-shell { padding-block: 2rem; }
   #report-map { height: 360px; }
+}
+
+/* ============================================================
+   Home screen
+   ============================================================ */
+.rd-home-shell { width: min(480px, 100%); margin-inline: auto; }
+
+.rd-top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.1rem 1.25rem; gap: 1rem;
+}
+.rd-brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; color: var(--text); }
+.rd-brand img { width: 32px; height: 32px; object-fit: contain; }
+.rd-brand strong { display: block; font-size: 1rem; font-weight: 800; letter-spacing: -.01em; }
+.rd-brand small { display: block; font-size: .68rem; color: var(--text-muted); }
+
+.rd-top-nav { display: none; align-items: center; gap: 1.5rem; }
+.rd-top-nav a { font-size: .85rem; font-weight: 650; color: var(--text-muted); text-decoration: none; }
+.rd-top-nav a:hover { color: var(--accent); }
+
+.rd-greeting { padding: .5rem 1.25rem 0; }
+.rd-greeting h1 { margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: -.02em; }
+.rd-greeting p { margin: .15rem 0 0; font-size: .85rem; color: var(--text-muted); }
+
+.rd-search-link {
+  display: flex; align-items: center; gap: .6rem; margin: 1rem 1.25rem 0;
+  padding: .85rem 1.1rem; background: var(--surface-elevated); border-radius: var(--radius-pill);
+  color: var(--text-muted); font-size: .85rem; font-weight: 600; text-decoration: none;
+}
+.rd-search-link .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+.rd-map-cta {
+  display: flex; flex-direction: column; justify-content: flex-end; gap: .9rem;
+  margin: 1.25rem 1.25rem 0; padding: 1.5rem; min-height: 260px; border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #0D171B, #063B31);
+  text-decoration: none; box-shadow: var(--shadow-card); position: relative;
+}
+.rd-map-cta svg.pin { position: absolute; top: 2rem; right: 2.5rem; width: 26px; height: 32px; }
+.rd-map-cta strong { display: block; font-size: 1.05rem; font-weight: 800; color: #F5F7FA; }
+.rd-map-cta span { display: block; margin-top: .2rem; font-size: .8rem; color: #B9C9C2; }
+
+.rd-chip-row { display: flex; gap: .75rem; padding: 1.25rem 1.25rem 0; }
+.rd-action-chip {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: .6rem;
+  padding: 1.1rem .5rem .85rem; background: var(--surface-elevated); border-radius: var(--radius-md);
+  text-decoration: none; color: var(--text);
+}
+.rd-action-chip .icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.rd-action-chip .icon svg { width: 18px; height: 18px; }
+.rd-action-chip span:last-child { font-size: .78rem; font-weight: 650; }
+.rd-action-chip.score .icon { background: var(--accent-soft); color: var(--accent); }
+.rd-action-chip.report .icon { background: var(--alert-soft); color: var(--alert); }
+.rd-action-chip.layers .icon { background: var(--flood-soft); color: var(--flood); }
+
+.rd-layer-list { display: flex; flex-direction: column; gap: .75rem; padding: 0 1.25rem 1.5rem; }
+.rd-layer-card { display: flex; gap: .9rem; padding: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); text-decoration: none; color: var(--text); }
+.rd-layer-card .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; margin-top: .3rem; }
+.rd-layer-card .info { flex: 1; min-width: 0; }
+.rd-layer-card .info strong { display: block; font-size: .9rem; font-weight: 700; }
+.rd-layer-card .info span { display: block; margin-top: .2rem; font-size: .78rem; color: var(--text-muted); line-height: 1.4; }
+.rd-flood .dot { background: var(--flood); }
+.rd-liq .dot { background: var(--liq); }
+.rd-shake .dot { background: var(--shake); }
+
+.rd-tab-bar { display: flex; justify-content: space-around; align-items: center; padding: .75rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--line); position: sticky; bottom: 0; }
+.rd-tab-bar a { background: none; border: none; font: inherit; color: var(--text-faint); display: flex; flex-direction: column; align-items: center; gap: .25rem; text-decoration: none; padding: .35rem .6rem; }
+.rd-tab-bar a .glyph { width: 22px; height: 22px; border-radius: 7px; background: var(--text-faint); }
+.rd-tab-bar a span { font-size: .68rem; font-weight: 700; }
+.rd-tab-bar a[aria-current="page"] { color: var(--accent); }
+.rd-tab-bar a[aria-current="page"] .glyph { background: var(--accent); }
+
+.rd-fab { position: fixed; right: max(1.25rem, calc((100% - 480px) / 2 + 1.25rem)); bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; text-decoration: none; box-shadow: 0 10px 24px rgba(31,174,115,.35); }
+
+@media (min-width: 720px) {
+  .rd-top-nav { display: flex; }
+  .rd-tab-bar { display: none; }
+  .rd-fab { display: none; }
+  .rd-home-shell { width: min(1100px, 100%); }
+  .rd-greeting, .rd-search-link, .rd-map-cta, .rd-chip-row, .rd-layer-list {
+    max-width: 480px; margin-left: auto; margin-right: auto;
+  }
 }
